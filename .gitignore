@@ -1,0 +1,41 @@
+# === Mac 系统特有缓存（强迫症必挡） ===
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+
+# === Python 编译垃圾与缓存 ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# === IDE 与编辑器临时配置文件 ===
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# === 视频测试大文件（防止把几十兆的录像错推上云端挤爆仓库） ===
+*.mp4
+*.avi
+*.mkv
