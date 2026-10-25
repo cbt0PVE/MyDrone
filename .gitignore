@@ -39,3 +39,20 @@ MANIFEST
 *.mp4
 *.avi
 *.mkv
+*.mov
+
+# === 模型权重（体积大，各机器自备；YOLO 首次运行会自动下载） ===
+*.pt
+*.pth
+*.onnx
+*.engine
+*.rknn
+
+# === Python 虚拟环境（Mac 上按需自建，别提交） ===
+.venv/
+venv/
+
+# === 本机专属配置，不入库 ===
+local/
+*.local.md
+.env
