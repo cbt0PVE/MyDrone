@@ -40,7 +40,8 @@
 
 ## 下一步
 
-1. 完成通道映射，填进 `docs/PX4_PARAMS.md`。
+0. **实机调试按 `docs/RC_OFFBOARD_SETUP.md` 走**（RC 开关 + Offboard 共存手册）。红线：清单第 5 项「Offboard 中打杆抢权」不通过就不上桨。
+1. 完成通道映射，填进 `docs/PX4_PARAMS.md` 和手册第 2 节的表。
 2. 按 `docs/PX4_PARAMS.md` 清单核参数，记录旧值。
 3. 决定是否先写一个只读 RC 通道监视脚本（不碰动力，打印通道值与抖动幅度）。
 

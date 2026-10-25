@@ -63,6 +63,7 @@ MyDrone/
 - `docs/GIT_CHEATSHEET.md` —— 拉取/提交/推送与常见报错处理
 - `docs/PROJECT_CONTEXT.md` —— 硬件、链路、痛点根因、方案、标准流程
 - `docs/PX4_PARAMS.md` —— 参数清单、失控保护链路、RC 通道映射方法
+- `docs/RC_OFFBOARD_SETUP.md` —— **实机调试手册**：RC 开关 + Offboard 共存完整操作流
 - `docs/CODE_NOTES.md` —— 现有脚本逐条审阅结论（含 4 个待修点）
 - `docs/ROADMAP.md` —— 分阶段计划
 - `docs/ENV.md` —— 两台机器的环境事实
