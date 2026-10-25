@@ -8,8 +8,9 @@
 ## 仓库同步状态
 
 - 远端 `origin/main` 已与本地合并（以远端为基线，Windows 侧文件叠加在上，历史线性）。
-- 远端：GitHub `git@github.com:cbt0PVE/MyDrone.git`；Gitee 镜像 `git@gitee.com:cbt13567191848/my-drone.git`（见 README）。
+- **唯一远端：GitHub** `git@github.com:cbt0PVE/MyDrone.git`。Gitee 镜像已取消，不再推送。
 - 备份分支 `backup/windows-init` 仅存在于 Windows 本地，未推送，确认无误后可删。
+- 新开对话的交接说明：`docs/AI_CONTEXT.md`（整段粘贴即可）。
 
 ## 阶段
 

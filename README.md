@@ -61,12 +61,14 @@ MyDrone/
 
     [x] 升级 pip-26.0.1 彻底清理环境警告。
 
-    [x] 本地仓库成功打通 GitHub & Gitee 双通道 SSH 免密推送。
+    [x] 本地仓库成功打通 GitHub SSH 免密推送。
 
-🛡️ 开源与备份说明
+🛡️ 版本管理与同步说明
 
-为了确保代码资产绝对安全与高可用性，本项目通过 Git 进行双云端同步：
+本项目只有**一个远端**，不再维护镜像：
 
-    主仓库 (国际/开源)： GitHub git@github.com:cbt0PVE/MyDrone.git
+```text
+GitHub： git@github.com:cbt0PVE/MyDrone.git
+```
 
-    备用镜像 (国内/高速)： Gitee git@gitee.com:cbt13567191848/my-drone.git
+> Gitee 镜像已于 2026-10 取消，不再推送。所有机器只认 GitHub，避免双远端产生分叉。

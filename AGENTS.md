@@ -32,6 +32,7 @@ MyDrone/
 
 - **收工前**：更新 `docs/STATUS.md`（到哪一步、下一步、坑/未决）。不写就等于丢记忆。
 - **接手时**：`git pull` → 读 `AGENTS.md` → 读 `docs/STATUS.md` → 再看相关文档。不要假设另一台做过什么。
+- **新开对话**：直接把 `docs/AI_CONTEXT.md` 整段贴过去，那是自包含的交接说明。
 
 ### 写文档的约定
 
@@ -58,6 +59,7 @@ MyDrone/
 ## 文档索引
 
 - `docs/STATUS.md` —— **当前进度与下一步（收工必更新）**
+- `docs/AI_CONTEXT.md` —— 自包含的交接上下文，新对话直接整段粘贴
 - `docs/PROJECT_CONTEXT.md` —— 硬件、链路、痛点根因、方案、标准流程
 - `docs/PX4_PARAMS.md` —— 参数清单、失控保护链路、RC 通道映射方法
 - `docs/CODE_NOTES.md` —— 现有脚本逐条审阅结论（含 4 个待修点）
