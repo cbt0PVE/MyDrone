@@ -43,7 +43,7 @@
 0. **实机调试按 `docs/RC_OFFBOARD_SETUP.md` 走**（RC 开关 + Offboard 共存手册）。红线：清单第 5 项「Offboard 中打杆抢权」不通过就不上桨。
 1. 完成通道映射，填进 `docs/PX4_PARAMS.md` 和手册第 2 节的表。
 2. 按 `docs/PX4_PARAMS.md` 清单核参数，记录旧值。
-3. 用 `rc_monitor.py`（只读，零风险）先验证拨开关模式是否变化；再用 `hover_test.py --no-arm` 验证能进 OFFBOARD；最后手托跑 `hover_test.py`。
+3. 用 `rc_monitor.py`（只读，零风险）先验证拨开关模式是否变化；再用 `hover_test.py --no-arm` 验证能进 OFFBOARD；最后手托跑 `hover_test.py`。两个脚本**顶部的 `PORT` 常量**就是串口设置，按设备管理器改（数传 57600 / USB 115200）。
 
 ## 环境提醒
 

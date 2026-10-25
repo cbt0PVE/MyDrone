@@ -15,7 +15,7 @@ MyDrone/
 ├── devlogs/       # 人类向开发日志：调研、踩坑、算法大纲、采购清单
 ├── image/         # 文档配图
 ├── src/           # 仿真/视觉源码：test_mavsdk.py、test_opencv.py、main_tracker*.py
-└── *.py           # 实物硬件脚本：connection.py、takeoff.py、drone_track.py
+└── *.py           # 实物脚本：connection / takeoff / drone_track / hover_test / rc_monitor
 ```
 
 - `devlogs/` 是**过程记录**（人看）；`docs/` 是**结论沉淀**（AI 看）。两边都保留，不互相替代。
@@ -52,7 +52,7 @@ MyDrone/
 
 ## 代码约定
 
-- **端口不硬编码**：新代码统一从环境变量 `DRONE_PORT` 读（Windows `serial://COM5:57600`，Mac `serial:///dev/tty.usbmodem*`，SITL `udp://:14540`）。现有脚本的硬编码等改造时一并处理。
+- **端口写在文件顶部**：每个脚本顶部一个 `PORT` 常量（如 `"serial://COM5:57600"`），注释写清"数传 57600 / USB 直连 115200"，命令行 `--port` 可临时覆盖。**用户偏好直接改常量，不要写自动探测逻辑。**
 - MAVSDK 用 gRPC 版（`import mavsdk`，3.15.x）。**不要**装 3.17+ 的 `mavsdk` 包——名字已改成原生绑定，API 不兼容。
 - 视觉从 OpenCV（HSV 质心）向 YOLO/RKNN 演进，两套别混着改。
 
