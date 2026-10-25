@@ -21,7 +21,8 @@
 
 - 通读现有三个脚本，结论见 `docs/CODE_NOTES.md`（未改代码）。
 - 采集 Windows 环境事实，见 `docs/ENV.md` A 节。
-- 2026-10-25 采集 Mac 环境事实，见 `docs/ENV.md` B 节：macOS 27.0.1 arm64、系统 Python 3.9.6（依赖装在用户 site-packages，无 venv）、mavsdk 3.15.3 与 torch 2.8.0/MPS 可用、PX4 SITL 二进制已构建但 jMAVSim 未构建（只有 JDK 25，缺 openjdk@17）、QGC 未装。
+- 2026-10-25 采集 Mac 环境事实，见 `docs/ENV.md` B 节：macOS 27.0.1 arm64、系统 Python 3.9.6（依赖装在用户 site-packages，无 venv）、mavsdk 3.15.3 与 torch 2.8.0/MPS 可用。
+- Mac 定位已澄清：**只用来写文档/日志、改代码，不维护仿真环境**。SITL/jMAVSim 的缺口（缺 JDK 17）只作存档，不是待办。
 - 建立仓库结构与跨机器同步约定。
 
 ## 正在做
@@ -46,4 +47,4 @@
 ## 环境提醒
 
 - Windows 用 conda `drone` 环境（Python 3.10 + mavsdk 3.15.3），别用 base。
-- Mac 已采集（`docs/ENV.md` B 节）：`python3` = 系统 3.9.6，依赖在用户 site-packages；PX4 检出在 `~/Developer/DroneProject/PX4-Autopilot`（shallow，无 tag）；jMAVSim 因缺 JDK 17 尚未跑通。
+- Mac 已采集（`docs/ENV.md` B 节）：`python3` = 系统 3.9.6，依赖在用户 site-packages；PX4 检出在 `~/Developer/DroneProject/PX4-Autopilot`（shallow，无 tag）。**Mac 不修仿真环境**，SITL/jMAVSim 仅存档；不要在这台机器上开工飞行脚本。

@@ -20,7 +20,7 @@
 
 ## B. macOS 笔记本 · 写文档 / 改代码
 
-**状态：已采集（2026-10-25，Mac 本机实测）。** 需要重查时跑：
+**本机定位：主要是改代码、写 `docs/` 与 `devlogs/` 的 Markdown。仿真环境不是当前需求，下面 SITL / jMAVSim 相关只作存档，别为它专门折腾。** 状态：已采集（2026-10-25，Mac 本机实测）。需要重查时跑：
 
 ```bash
 sw_vers && uname -m
@@ -31,7 +31,7 @@ ls /dev/tty.* /dev/cu.*      # 飞控/数传插上后找 usbserial / usbmodem
 
 | 项 | 值 |
 | --- | --- |
-| 角色 | 写文档、改代码、跑 PX4 SITL。**不接实物飞控飞行**（数传与供电以台式机为准） |
+| 角色 | **写文档、维护日志、改代码**；SITL 属可选存档，暂不维护。**不接实物飞控飞行**（数传与供电以台式机为准） |
 | 系统 | macOS 27.0.1（build 26A434），`uname -r` = 27.0.0 |
 | 芯片 | Apple Silicon，arm64（`uname -m` / `arch` 均为 arm64） |
 | Homebrew | 7.0.9，前缀 `/opt/homebrew` |
@@ -44,8 +44,8 @@ ls /dev/tty.* /dev/cu.*      # 飞控/数传插上后找 usbserial / usbmodem
 | PX4 编译依赖 | empy 3.3.4、pyros-genmsg 0.5.8、PyYAML 6.0.3、kconfiglib 14.1.0、jsonschema 4.25.1、future 0.18.2（同在 3.9 用户 site-packages）— 已验证，与踩坑记录一致 |
 | PX4-Autopilot 检出位置 | `~/Developer/DroneProject/PX4-Autopilot`（在仓库外，不入库） |
 | PX4 版本 | 分支 main，HEAD `96afb47`（2026-05-11），**shallow clone、无 tag，版本号未确认** |
-| SITL 产物 | `build/px4_sitl_default/bin/px4` 存在（2026-05-21 构建）；本次未重新启动验证 |
-| 仿真器 | jMAVSim **未构建**（`Tools/jMAVSim/out` 不存在） |
+| SITL 产物 | `build/px4_sitl_default/bin/px4` 存在（2026-05-21 构建）；本次未复跑（存档，非需求） |
+| 仿真器 | jMAVSim **未构建**（`Tools/jMAVSim/out` 不存在）——存档项，本机不修 |
 | Java | 仅 OpenJDK **25.0.3**（Temurin）；PX4 `Tools/setup/macos.sh` 要求 `openjdk@17`，未安装 → 待验证（25 很可能编不过 jMAVSim） |
 | QGroundControl | **未安装**（/Applications 与 ~/Applications 都没有）→ 本机做不了 RC 通道映射 |
 | 数传端口 | **未接入飞控**（无 `/dev/tty.usbmodem*` / `usbserial*`）。本机不接实物飞控飞行；真要插，地址形如 `serial:///dev/tty.usbmodem1101`（绝对路径三个斜杠） |
@@ -59,9 +59,7 @@ ls /dev/tty.* /dev/cu.*      # 飞控/数传插上后找 usbserial / usbmodem
 
 ### Mac 上装依赖的建议
 
-**现状（2026-10-25）**：所有依赖直接装在系统 Python 3.9.6 的用户 site-packages 里，能跑但不隔离；`brew python@3.14` 也在 PATH 里，直接 `python3 -m venv` 会拿 3.9、`python3.14 -m venv` 会拿 3.14，两者别混。PX4 的编译脚本当前就是走 3.9.6 这套（`empy 3.3.4` 装在这里），**动 Python 前先确认 SITL 还能编**。
-
-若要新建隔离环境（建议 3.11，PX4 与 mavsdk 都稳）：
+**现状（2026-10-25）**：依赖直接装在系统 Python 3.9.6 的用户 site-packages 里，能跑但不隔离；`brew python@3.14` 也在 PATH 里，直接敲 `python3` 拿的是 3.9.6。**只写文档不用管这些**；要跑脚本时再按下面建隔离环境（建议 3.11）：
 
 ```bash
 brew install python@3.11
@@ -71,13 +69,14 @@ pip install ultralytics                 # 需要跑视觉时再装，会自动�
 ```
 
 > Apple Silicon 上 `mavsdk` 的 gRPC 二进制有 arm64 wheel，已验证可直接装；报架构错误再考虑 Rosetta。
+> 注意 PX4 的编译脚本当前走的是 3.9.6 那套（`empy 3.3.4` 装在这里），真要动 SITL 再迁移，别为了跑一次仿真先换环境。
 
-### Mac 侧待办（采集时发现，未处理）
+### Mac 侧待办（按优先级；只有第 3 条和当前阶段有关）
 
-1. **jMAVSim 跑不起来**：只装了 JDK 25，PX4 要求 `openjdk@17`；`make px4_sitl jmavsim` 大概率在编 jMAVSim 时报 `release version`/`class file` 错误。要跑 SITL 仿真就先 `brew install openjdk@17` 并让 `JAVA_HOME` 指向它（待验证）。
-2. **PX4 是 shallow clone（depth 1，无 tag）**：查不到固件版本号，而 `COM_RC_OVERRIDE` 是否位掩码**取决于 PX4 版本**。需要用 `ver all` 或在 QGC 里读固件版本，别靠猜。
-3. **QGC 未装**：RC 通道映射（`RC_MAP_OFFB_SW` 的前置）在 Mac 上做不了，仍等 Windows 侧出表。
-4. 系统 Python 3.9 已被 PX4 上游弃用、homebrew 侧是 3.14；这套组合能编是运气，换 PX4 版本或重装依赖时优先考虑 3.11 venv。
+1. ~~jMAVSim / JDK 17~~：**当前不做**。只装了 JDK 25，`Tools/jMAVSim/out` 不存在；将来真要跑 SITL 再 `brew install openjdk@17`（待验证）。
+2. 依赖未隔离（系统 3.9 + brew 3.14 并存）：只在需要跑脚本时处理，写文档不受影响。
+3. **PX4 是 shallow clone（depth 1、无 tag）**，本机查不到固件版本。而 `COM_RC_OVERRIDE` 是否位掩码取决于 PX4 版本 —— 这项在 Mac 上无解，仍需 Windows 侧 `ver all` / QGC 读版本，别靠猜。
+4. QGC 未装：RC 通道映射（`RC_MAP_OFFB_SW` 的前置）在 Mac 上做不了，仍等 Windows 侧出表。
 
 ## 环境变量
 
