@@ -3,12 +3,13 @@
 > **每次收工前更新这里。** 这是跨机器唯一的"记忆"，不写就等于丢。
 > 格式：写结论，不写过程流水账。
 
-最后更新：2026-10-25 · Windows
+最后更新：2026-10-25 · Mac（补 Mac 环境采集；Windows 内容未动）
 
 ## 仓库同步状态
 
 - 远端 `origin/main` 已与本地合并（以远端为基线，Windows 侧文件叠加在上，历史线性）。
 - **唯一远端：GitHub** `git@github.com:cbt0PVE/MyDrone.git`。Gitee 镜像已取消，不再推送。
+- 2026-10-25 Mac 侧发现本地 `origin` 下仍挂着 Gitee 的第二条 `url`（`git push` 会同时推到 Gitee），已删除；现在 `git remote -v` 只有 GitHub。其他机器 `git remote -v` 也顺手核对一遍。
 - 备份分支 `backup/windows-init` 仅存在于 Windows 本地，未推送，确认无误后可删。
 - 新开对话的交接说明：`docs/AI_CONTEXT.md`（整段粘贴即可）。
 
@@ -20,6 +21,7 @@
 
 - 通读现有三个脚本，结论见 `docs/CODE_NOTES.md`（未改代码）。
 - 采集 Windows 环境事实，见 `docs/ENV.md` A 节。
+- 2026-10-25 采集 Mac 环境事实，见 `docs/ENV.md` B 节：macOS 27.0.1 arm64、系统 Python 3.9.6（依赖装在用户 site-packages，无 venv）、mavsdk 3.15.3 与 torch 2.8.0/MPS 可用、PX4 SITL 二进制已构建但 jMAVSim 未构建（只有 JDK 25，缺 openjdk@17）、QGC 未装。
 - 建立仓库结构与跨机器同步约定。
 
 ## 正在做
@@ -44,4 +46,4 @@
 ## 环境提醒
 
 - Windows 用 conda `drone` 环境（Python 3.10 + mavsdk 3.15.3），别用 base。
-- Mac 环境待采集，见 `docs/ENV.md` B 节。
+- Mac 已采集（`docs/ENV.md` B 节）：`python3` = 系统 3.9.6，依赖在用户 site-packages；PX4 检出在 `~/Developer/DroneProject/PX4-Autopilot`（shallow，无 tag）；jMAVSim 因缺 JDK 17 尚未跑通。
