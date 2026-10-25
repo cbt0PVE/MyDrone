@@ -44,12 +44,13 @@ PORT = "serial://COM5:57600"
 # =================================================
 
 # ============ 飞行参数 ============
+# 这台机马力很足：实测 16% 推力就能爬到 4~5 米，所以推力范围整体压得很低。
 TARGET_ALT = 1.0        # 目标高度 m
 HOLD_SEC = 0.0          # 0 = 一直悬停到 Ctrl+C
-HOVER_THRUST = 0.35     # 悬停基准推力（250 级 4S 大概 0.35~0.45）
-KP_ALT = 0.7            # 高度环增益
-MIN_THRUST = 0.08
-MAX_THRUST = 0.70       # 安全上限
+HOVER_THRUST = 0.16     # 悬停基准推力；若解锁后一直往上爬，说明悬停点更低，下调试 0.14/0.15
+KP_ALT = 0.05           # 高度环增益；推重比越高增益要越小，0.05 已经够猛
+MIN_THRUST = 0.04
+MAX_THRUST = 0.25       # 安全上限，只比悬停高 50%，防止一冲就上天
 
 T0 = time.time()
 
@@ -236,7 +237,7 @@ async def main(args) -> int:
               "手托的话现在把飞机托起来，它会自己找平衡")
         target = args.alt
         climb_end = time.time() + 30
-        last_sat = False
+        sat_since, alt_at_sat = None, 0.0
         while time.time() < climb_end and not st["handed_over"]:
             err = target - st["alt"]
             thrust = max(MIN_THRUST, min(MAX_THRUST, args.hover_thrust + args.kp * err))
@@ -245,9 +246,14 @@ async def main(args) -> int:
                 f"模式 {getattr(st['mode'], 'name', '?')}")
 
             saturated = thrust >= MAX_THRUST - 0.001
-            if saturated and not last_sat:
-                hint(["推力已顶到上限，可能：飞机太重 / 螺旋桨装反 / 悬停推力设太小"])
-            last_sat = saturated
+            if saturated and sat_since is None:
+                sat_since, alt_at_sat = time.time(), st["alt"]
+            elif saturated and time.time() - sat_since > 3 and st["alt"] - alt_at_sat < 0.1:
+                hint([f"推力顶到上限 {MAX_THRUST*100:.0f}% 三秒还没离地：",
+                      "可能 桨装反 / 电池电压低 / 悬停推力设太小"])
+                sat_since = None
+            elif not saturated:
+                sat_since = None
 
             if st["alt"] >= target - 0.1:
                 log("       [OK] 到达目标高度")
