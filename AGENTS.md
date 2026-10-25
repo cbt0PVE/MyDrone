@@ -60,6 +60,7 @@ MyDrone/
 
 - `docs/STATUS.md` —— **当前进度与下一步（收工必更新）**
 - `docs/AI_CONTEXT.md` —— 自包含的交接上下文，新对话直接整段粘贴
+- `docs/GIT_CHEATSHEET.md` —— 拉取/提交/推送与常见报错处理
 - `docs/PROJECT_CONTEXT.md` —— 硬件、链路、痛点根因、方案、标准流程
 - `docs/PX4_PARAMS.md` —— 参数清单、失控保护链路、RC 通道映射方法
 - `docs/CODE_NOTES.md` —— 现有脚本逐条审阅结论（含 4 个待修点）
