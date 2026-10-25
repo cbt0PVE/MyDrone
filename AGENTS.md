@@ -25,7 +25,7 @@ MyDrone/
 
 | 机器 | 用途 |
 | --- | --- |
-| **macOS**（Apple Silicon） | 写文档、改代码、跑 PX4 SITL + jMAVSim |
+| **macOS**（Apple Silicon） | 写文档、维护日志、改代码（SITL 环境仅存档，不维护） |
 | **Windows 台式机** | 接实物飞控（数传/串口）、调 PX4 参数、跑硬件脚本、GPU 跑 YOLO |
 
 ### 切换机器的固定动作
