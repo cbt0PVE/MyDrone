@@ -56,3 +56,8 @@ venv/
 local/
 *.local.md
 .env
+
+# === 数据集与训练产物（体积大，各机器自己生成） ===
+datasets/
+data/
+runs/

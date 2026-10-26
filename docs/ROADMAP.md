@@ -33,10 +33,22 @@
 
 ### 立刻能做，且不依赖任何采购：第 3 周内容
 
-- [ ] 定数据集：COCO person 子集（现成）或自采视频抽帧标注；三类场景各留一份验证集
-- [ ] 训练脚本：YOLOv8n，固定随机种子、记录 mAP 与每类召回
-- [ ] 导出与测速：`best.pt` → ONNX →（后续）RKNN INT8，测 PC 端与目标板帧率
-- [ ] 记录：训练日志、混淆矩阵、PR 曲线，直接作为中期验收素材
+**数据集已定：COCO val2017 里只取 person 一类**（约 2600 张，够课程用；train2017 是 19GB，太重）。
+脚本已经写好，两条命令跑完：
+
+```powershell
+python tools/prepare_coco_person.py      # 下载约 800MB，过滤出 person，生成 YOLO 格式
+python tools/train_yolo.py               # 训练 50 epoch + 验证 + 导出 ONNX + 测 FPS
+```
+
+先验流程可以用 `python tools/train_yolo.py --quick`（3 epoch / 320px，几分钟出结果）。
+
+- [ ] 训练：YOLOv8n 单类，记录 mAP@0.5 与 mAP@0.5:0.95，产出 `runs/detect/coco_person/summary.md`
+- [ ] 导出：`best.onnx`（脚本自动做）
+- [ ] 测速：PC 端 FPS 已自动测；机载端 RKNN 等香橙派到位再测
+- [ ] 记录：训练日志、混淆矩阵、PR 曲线（`runs/detect/coco_person/` 里都有），直接作为中期验收素材
+
+> 注意：单类模型的 mAP 不能和 COCO 80 类榜单比，报告里要写明。
 
 > 这些在笔记本上就能完成，和无人机无关。**这是当前性价比最高的一块。**
 

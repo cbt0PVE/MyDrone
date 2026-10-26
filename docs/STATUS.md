@@ -18,6 +18,7 @@
 
 - 通读早期三个脚本，结论见 `docs/CODE_NOTES.md`。
 - 2026-10-27 实测 WSL 仿真链路：PX4 SITL（`gz_x500`）启动成功，MAVSDK `udp://:14540` 1.1 秒连上，见 `docs/SITL_GUIDE.md`。
+- 2026-10-27 第 3 周工具就绪：`tools/prepare_coco_person.py`（COCO val2017 → 单类 person 数据集）、`tools/train_yolo.py`（训练 + 验证 + 导出 ONNX + 测 FPS）。数据集已定：**COCO person 子集**，不自采。
 - 双机环境采集，见 `docs/ENV.md`（Windows 台式机 = 实机调试；Mac = 文档/代码，不维护 SITL）。
 - **RC/Offboard 调试工具**：`rc_monitor.py`（只读监视）、`hover_test.py`（1 米悬停，可 Ctrl+C / 遥控器接管）。端口写在文件顶部 `PORT`。
 - **RC 开关配置手册**：`docs/RC_OFFBOARD_SETUP.md`（含参数表、验证清单、排查顺序）。

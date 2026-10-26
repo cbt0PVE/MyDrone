@@ -16,6 +16,7 @@ MyDrone/
 ├── image/         # 文档配图
 ├── src/           # 仿真/视觉源码：test_mavsdk.py、test_opencv.py、main_tracker*.py
 ├── vnav/          # 视觉导航控制包：config / vision / link / safety / control / mission
+├── tools/         # 数据集与模型工具：make_aruco / prepare_coco_person / train_yolo
 ├── tests/         # 冒烟测试（不接硬件也能跑）
 └── *.py           # 实物脚本：connection / takeoff / drone_track / hover_test / rc_monitor
 ```
