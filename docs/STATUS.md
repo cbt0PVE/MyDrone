@@ -7,10 +7,11 @@
 
 ## 阶段
 
-两条线并行：
+按课程十周计划推进（逐周对照见 `docs/ROADMAP.md`）：
 
-- **阶段四（课程主线，2026.10.16–11.30）**：视觉导航闭环 + 安全防护。代码已写完，待实机验证。
-- **阶段 0（阻塞项）**：RC 与 Offboard 共存。这条不通，阶段四的实飞做不了。
+- **硬件超前**：装机完成、能飞，**RC 与 Offboard 已可切换（已验证）**。
+- **当前该做第 3 周**：YOLOv8n 的数据集 / 训练 / 量化 / 测耗时。
+- **欠账**：第 2 周 SITL + Gazebo 未跑通；TFmini-S 未装；相机与机载电脑未采购。
 
 ## 已完成
 
@@ -18,16 +19,21 @@
 - 双机环境采集，见 `docs/ENV.md`（Windows 台式机 = 实机调试；Mac = 文档/代码，不维护 SITL）。
 - **RC/Offboard 调试工具**：`rc_monitor.py`（只读监视）、`hover_test.py`（1 米悬停，可 Ctrl+C / 遥控器接管）。端口写在文件顶部 `PORT`。
 - **RC 开关配置手册**：`docs/RC_OFFBOARD_SETUP.md`（含参数表、验证清单、排查顺序）。
-- **阶段四代码**（2026-10-27）：
+- **RC 与 Offboard 切换已验证可用**（遥控器与地面站代码可共存）。
+- **视觉/安全骨架（ArUco 版，2026-10-27）**：
   - `vnav/` 包：`config` / `vision` / `link` / `safety` / `control` / `mission`
   - `run_visual_landing.py`：实飞降落 + `--bench` 手持验证
   - `vision_demo.py`：纯视觉演示（Mac 可跑）
-  - `tests/test_vision_smoke.py`：4 项冒烟测试，当前 4/4 通过
+  - `tools/make_aruco.py` + `markers/`：可打印标签，按物理尺寸出图
+  - `tests/test_vision_smoke.py`：4 项冒烟测试，4/4 通过
   - 说明文档 `docs/PHASE4_ARCHITECTURE.md`
+
+> 注意：这套骨架的检测器是 ArUco，**课程要的是 YOLOv8n 检测人**。
+> 下游（解算→安全→控制→任务）可复用，检测器需要按 `docs/ROADMAP.md` 第四节做成可插拔。
 
 ## 正在做
 
-- 阶段四的**实机验证**（Windows）：先手持 `--bench` 验方向，再实飞降落。
+- 第 3 周：YOLOv8n 数据集与训练（不依赖无人机/相机采购）。
 
 ## 待确认（别当结论用）
 
