@@ -10,12 +10,14 @@
 按课程十周计划推进（逐周对照见 `docs/ROADMAP.md`）：
 
 - **硬件超前**：装机完成、能飞，**RC 与 Offboard 已可切换（已验证）**。
+- **仿真已补齐**：WSL 里的 PX4 SITL + Gazebo Harmonic 实测可用，MAVSDK 1.1s 连上（见 `docs/SITL_GUIDE.md`）。
 - **当前该做第 3 周**：YOLOv8n 的数据集 / 训练 / 量化 / 测耗时。
-- **欠账**：第 2 周 SITL + Gazebo 未跑通；TFmini-S 未装；相机与机载电脑未采购。
+- **缺口**：TFmini-S 未装；相机与机载电脑未采购；相机未标定。
 
 ## 已完成
 
 - 通读早期三个脚本，结论见 `docs/CODE_NOTES.md`。
+- 2026-10-27 实测 WSL 仿真链路：PX4 SITL（`gz_x500`）启动成功，MAVSDK `udp://:14540` 1.1 秒连上，见 `docs/SITL_GUIDE.md`。
 - 双机环境采集，见 `docs/ENV.md`（Windows 台式机 = 实机调试；Mac = 文档/代码，不维护 SITL）。
 - **RC/Offboard 调试工具**：`rc_monitor.py`（只读监视）、`hover_test.py`（1 米悬停，可 Ctrl+C / 遥控器接管）。端口写在文件顶部 `PORT`。
 - **RC 开关配置手册**：`docs/RC_OFFBOARD_SETUP.md`（含参数表、验证清单、排查顺序）。
