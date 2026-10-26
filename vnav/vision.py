@@ -298,9 +298,10 @@ class VisionWorker:
     # ---------------- 生命周期 ----------------
 
     def start(self):
-        self.cap = cv2.VideoCapture(self.cfg.camera_index)
+        # camera_source 可以是序号（0/1）也可以是视频流地址（手机当摄像头）
+        self.cap = cv2.VideoCapture(self.cfg.camera_source)
         if not self.cap.isOpened():
-            raise RuntimeError(f"打不开摄像头 index={self.cfg.camera_index}")
+            raise RuntimeError(f"打不开摄像头 {self.cfg.camera_source!r}")
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.cfg.frame_width)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.cfg.frame_height)
 

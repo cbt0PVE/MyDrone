@@ -19,7 +19,11 @@ class Config:
     control_hz: float = 20.0  # 控制循环频率；PX4 要求 >2Hz，20Hz 留足余量
 
     # ---------------- 相机与标记 ----------------
-    camera_index: int = 0
+    # 摄像头来源，两种写法都行：
+    #   0 / 1 / 2        本机（或机载电脑）的摄像头序号
+    #   "http://ip:8080/video"   手机装 IP Webcam 当无线摄像头用
+    # 没有机载电脑时，用手机当摄像头是最省钱的手持验证方案。
+    camera_source: object = 0
     frame_width: int = 640
     frame_height: int = 480
     # 相机标定文件（可选）。没有就按画面尺寸估一个内参，测距会有偏差。
@@ -55,6 +59,17 @@ class Config:
     def __post_init__(self):
         if self.control_hz <= 0:
             raise ValueError("control_hz 必须大于 0")
+
+
+def parse_camera_source(value):
+    """命令行传进来的字符串转成摄像头来源。
+
+    "0" -> 0（本机摄像头序号）
+    "http://..." -> 原样返回（视频流地址）
+    """
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return value
 
 
 def load_camera_matrix(cfg: Config):

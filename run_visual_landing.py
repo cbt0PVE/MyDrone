@@ -33,7 +33,7 @@ for _stream in (sys.stdout, sys.stderr):
         pass
 
 from vnav import link, safety
-from vnav.config import Config, load_camera_matrix
+from vnav.config import Config, load_camera_matrix, parse_camera_source
 from vnav.control import OffboardController
 from vnav.mission import VisualLandingMission
 from vnav.vision import ArucoTracker, VisionWorker
@@ -48,7 +48,7 @@ def log(msg=""):
 def parse_args():
     ap = argparse.ArgumentParser(description="视觉追踪降落 / 手持闭环验证")
     ap.add_argument("--port", default=None, help="串口，默认用 config.py 里的")
-    ap.add_argument("--camera", type=int, default=0, help="摄像头序号")
+    ap.add_argument("--camera", default=None, help='摄像头：0/1 或 "http://ip:8080/video"')
     ap.add_argument("--alt", type=float, default=None, help="追踪高度 m")
     ap.add_argument("--marker-size", type=float, default=None, help="标签边长 m")
     ap.add_argument("--bench", action="store_true", help="手持/台架验证：只对准不下降")
@@ -65,7 +65,7 @@ async def run(args):
         cfg.hover_alt_m = args.alt
     if args.marker_size:
         cfg.marker_size_m = args.marker_size
-    cfg.camera_index = args.camera
+    cfg.camera_source = parse_camera_source(args.camera) if args.camera else cfg.camera_source
     cfg.show_window = not args.no_window
 
     log("======== 配置 ========")

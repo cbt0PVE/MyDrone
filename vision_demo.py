@@ -27,20 +27,24 @@ for _stream in (sys.stdout, sys.stderr):
 
 import cv2
 
-from vnav.config import Config, load_camera_matrix
+from vnav.config import Config, load_camera_matrix, parse_camera_source
 from vnav.vision import ArucoTracker
 
 
 def main():
     ap = argparse.ArgumentParser(description="ArUco 纯视觉演示")
-    ap.add_argument("--camera", type=int, default=0)
+    ap.add_argument(
+        "--camera",
+        default="0",
+        help='摄像头：0/1 或视频流地址，如 "http://192.168.1.23:8080/video"',
+    )
     ap.add_argument("--marker-size", type=float, default=None, help="标签边长 m")
     ap.add_argument("--calib", default=None, help="标定文件 json")
     ap.add_argument("--print-only", action="store_true", help="不弹窗只打印")
     args = ap.parse_args()
 
     cfg = Config()
-    cfg.camera_index = args.camera
+    cfg.camera_source = parse_camera_source(args.camera)
     if args.marker_size:
         cfg.marker_size_m = args.marker_size
     if args.calib:
@@ -54,9 +58,9 @@ def main():
 
     tracker = ArucoTracker(cfg, K, dist)
 
-    cap = cv2.VideoCapture(cfg.camera_index)
+    cap = cv2.VideoCapture(cfg.camera_source)
     if not cap.isOpened():
-        print(f"[X] 打不开摄像头 index={cfg.camera_index}")
+        print(f"[X] 打不开摄像头 {cfg.camera_source!r}")
         return 1
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg.frame_width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.frame_height)

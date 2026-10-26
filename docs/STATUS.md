@@ -36,15 +36,18 @@
 3. `RC_STICK_DZ` 默认是否已是 0.1。
 4. 相机内参未标定（`calib.json` 还不存在），视觉测距目前是估算值。
 5. ArUco 标签实际边长、安装朝向（画面顶部是否对机头）尚未实测确认。
+6. **摄像头与机载电脑均未采购**——视觉只能用笔记本摄像头或手机 IP Webcam 验证，装机自主降落要等硬件。
 
 ## 下一步
 
 0. **实机调试按 `docs/RC_OFFBOARD_SETUP.md` 走**。红线：清单第 5 项「Offboard 中打杆抢权」不通过就不上桨。
 1. 完成 RC 通道映射，填进 `docs/PX4_PARAMS.md` 与手册第 2 节。
-2. `python tests/test_vision_smoke.py` 确认算法没被改坏（Mac 上也能跑）。
-3. 手持 `python run_visual_landing.py --bench`：验正负号 + 验"丢目标 2 秒交还控制权"。
-4. 张正友标定 → 生成 `calib.json` → 复测距离精度。
-5. 以上都过，再实飞 `python run_visual_landing.py`。
+2. 生成并打印标签：`python tools/make_aruco.py`，量黑框边长，改 `marker_size_m`。
+3. 用笔记本摄像头验算法：`python vision_demo.py --marker-size 0.12`。
+4. 手机 IP Webcam 当摄像头，手持 `python run_visual_landing.py --bench --camera "http://..."`：验正负号 + 验"丢目标 2 秒交还控制权"。
+5. 采购 USB 广角摄像头（几十块，UVC 免驱）→ 再做真正的机载手持验证。
+6. 张正友标定 → `calib.json` → 复测距离精度。
+7. 以上都过、且机载电脑到位，再实飞 `python run_visual_landing.py`。
 
 ## 环境提醒
 
