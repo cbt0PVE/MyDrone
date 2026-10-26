@@ -26,6 +26,7 @@ import json
 import random
 import shutil
 import sys
+import time
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -46,28 +47,138 @@ FILES = {
 PERSON_ID = 1
 
 
-def download(url: str, dst: Path) -> None:
-    """带进度条下载。已经存在就跳过。"""
+def download(url: str, dst: Path, workers: int = 6, chunk_mb: int = 4) -> None:
+    """多线程分段下载。
+
+    为什么要分段：实测这个图床单连接只有 ~0.5 MB/s，816MB 要下 25 分钟以上；
+    开 4~6 个 Range 请求能到 1.3 MB/s 左右，10 分钟就能下完。
+
+    容错：
+      - 每个分段失败重试 3 次；
+      - 服务器不支持 Range（返回整包）或整体失败，退回单连接顺序下载；
+      - 解压前会校验 zip 完整性。
+    """
     if dst.exists() and dst.stat().st_size > 0:
         print(f"  已存在，跳过下载：{dst.name}")
         return
 
-    print(f"  下载 {url}")
-    print(f"    -> {dst}")
+    candidates = [url]
+    if url.startswith("https://"):
+        candidates.append("http://" + url[len("https://"):])
 
-    def hook(blocks, block_size, total):
-        if total > 0:
-            done = blocks * block_size / total * 100
-            print(f"\r    {done:5.1f}%  ({blocks * block_size / 1e6:.0f}/{total / 1e6:.0f} MB)",
-                  end="", flush=True)
+    for idx, u in enumerate(candidates, 1):
+        print(f"  下载 ({idx}/{len(candidates)}) {u}")
+        try:
+            _download_parallel(u, dst, workers, chunk_mb)
+            if dst.stat().st_size > 0:
+                return
+        except Exception as e:
+            print(f"    分段下载失败（{type(e).__name__}: {str(e)[:60]}），改单连接重试")
+            try:
+                _download_stream(u, dst)
+                if dst.stat().st_size > 0:
+                    return
+            except Exception as e2:
+                print(f"    单连接也失败：{type(e2).__name__}: {str(e2)[:60]}")
+                if dst.exists():
+                    dst.unlink()
 
-    urllib.request.urlretrieve(url, dst, reporthook=hook)
+    raise RuntimeError(f"下载失败：{url}\n也可以手动下载后放到 {dst}")
+
+
+def _probe_size(url: str) -> int:
+    """用 Range 探一下文件总大小。"""
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "Mozilla/5.0", "Range": "bytes=0-0"}
+    )
+    with urllib.request.urlopen(req, timeout=30) as r:
+        cr = r.headers.get("Content-Range")  # 形如 bytes 0-0/816293376
+        if cr and "/" in cr:
+            return int(cr.rsplit("/", 1)[1])
+        return int(r.headers.get("Content-Length") or 0)
+
+
+def _download_parallel(url: str, dst: Path, workers: int, chunk_mb: int) -> None:
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    total = _probe_size(url)
+    if total <= 0:
+        raise RuntimeError("拿不到文件大小")
+
+    chunk = chunk_mb * 1024 * 1024
+    ranges = [(s, min(s + chunk, total) - 1) for s in range(0, total, chunk)]
+    print(f"    共 {total / 1e6:.0f} MB，切成 {len(ranges)} 段，{workers} 并发")
+
+    with open(dst, "wb") as f:
+        f.truncate(total)
+
+    done = [0]
+    lock = threading.Lock()
+
+    def work(start, end):
+        want = end - start + 1
+        for attempt in range(3):
+            try:
+                req = urllib.request.Request(
+                    url,
+                    headers={"User-Agent": "Mozilla/5.0", "Range": f"bytes={start}-{end}"},
+                )
+                with urllib.request.urlopen(req, timeout=60) as r:
+                    data = r.read()
+                if len(data) != want:
+                    raise IOError(f"长度不符 {len(data)}/{want}")
+                with open(dst, "r+b") as fh:
+                    fh.seek(start)
+                    fh.write(data)
+                with lock:
+                    done[0] += len(data)
+                return
+            except Exception:
+                if attempt == 2:
+                    raise
+
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        futures = [ex.submit(work, s, e) for s, e in ranges]
+        last = 0.0
+        while any(not f.done() for f in futures):
+            time.sleep(0.5)
+            pct = done[0] / total * 100
+            if time.time() - last > 2:
+                last = time.time()
+                print(f"\r    {pct:5.1f}%  ({done[0] / 1e6:.0f}/{total / 1e6:.0f} MB)",
+                      end="", flush=True)
+        for f in futures:
+            f.result()  # 有异常在这里抛出
+    print("")
+
+
+def _download_stream(url: str, dst: Path) -> None:
+    """单连接顺序下载，作为分段失败的兜底。"""
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=60) as resp, open(dst, "wb") as f:
+        total = int(resp.headers.get("Content-Length") or 0)
+        done = 0
+        last = 0.0
+        while True:
+            chunk = resp.read(1024 * 256)
+            if not chunk:
+                break
+            f.write(chunk)
+            done += len(chunk)
+            if total and time.time() - last > 2:
+                last = time.time()
+                print(f"\r    {done / total * 100:5.1f}%  ({done / 1e6:.0f}/{total / 1e6:.0f} MB)",
+                      end="", flush=True)
     print("")
 
 
 def unzip(src: Path, dst: Path) -> None:
     print(f"  解压 {src.name} ...")
     with zipfile.ZipFile(src) as zf:
+        bad = zf.testzip()
+        if bad:
+            raise RuntimeError(f"{src.name} 已损坏（坏文件 {bad}），删掉重下")
         zf.extractall(dst)
 
 

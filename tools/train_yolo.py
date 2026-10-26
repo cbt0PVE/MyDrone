@@ -130,7 +130,9 @@ def main():
         batch=args.batch,
         device=device,
         name=args.name,
-        project="runs/detect",
+        # 注意：ultralytics 的默认 project 是 runs/detect，这里显式给 runs，
+        # 产物才会落在 runs/<name>/ 而不是 runs/detect/runs/detect/<name>/
+        project="runs",
         # 课程数据集小，关掉一些昂贵的增强，训练更快也更稳
         mosaic=0.5,
         close_mosaic=5 if args.epochs > 10 else 0,

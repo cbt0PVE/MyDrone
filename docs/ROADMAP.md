@@ -43,10 +43,10 @@ python tools/train_yolo.py               # 训练 50 epoch + 验证 + 导出 ONN
 
 先验流程可以用 `python tools/train_yolo.py --quick`（3 epoch / 320px，几分钟出结果）。
 
-- [ ] 训练：YOLOv8n 单类，记录 mAP@0.5 与 mAP@0.5:0.95，产出 `runs/detect/coco_person/summary.md`
-- [ ] 导出：`best.onnx`（脚本自动做）
-- [ ] 测速：PC 端 FPS 已自动测；机载端 RKNN 等香橙派到位再测
-- [ ] 记录：训练日志、混淆矩阵、PR 曲线（`runs/detect/coco_person/` 里都有），直接作为中期验收素材
+- [x] 训练：YOLOv8n 单类，**mAP@0.5 = 0.7526**，mAP@0.5:0.95 = 0.4983（见 `docs/WEEK3_RESULTS.md`）
+- [x] 导出：`best.onnx` 已生成
+- [x] 测速：4060 上 PyTorch 66.3 FPS / ONNX-CPU 45.7 FPS
+- [x] 记录：训练日志、混淆矩阵、PR 曲线已归档到 `docs/figs/`
 
 > 注意：单类模型的 mAP 不能和 COCO 80 类榜单比，报告里要写明。
 
