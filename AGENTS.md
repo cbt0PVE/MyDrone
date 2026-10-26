@@ -15,6 +15,8 @@ MyDrone/
 ├── devlogs/       # 人类向开发日志：调研、踩坑、算法大纲、采购清单
 ├── image/         # 文档配图
 ├── src/           # 仿真/视觉源码：test_mavsdk.py、test_opencv.py、main_tracker*.py
+├── vnav/          # 视觉导航控制包：config / vision / link / safety / control / mission
+├── tests/         # 冒烟测试（不接硬件也能跑）
 └── *.py           # 实物脚本：connection / takeoff / drone_track / hover_test / rc_monitor
 ```
 
@@ -64,6 +66,7 @@ MyDrone/
 - `docs/PROJECT_CONTEXT.md` —— 硬件、链路、痛点根因、方案、标准流程
 - `docs/PX4_PARAMS.md` —— 参数清单、失控保护链路、RC 通道映射方法
 - `docs/RC_OFFBOARD_SETUP.md` —— **实机调试手册**：RC 开关 + Offboard 共存完整操作流
+- `docs/PHASE4_ARCHITECTURE.md` —— **阶段四代码说明**：坐标系、安全矩阵、状态机、验收标准
 - `docs/CODE_NOTES.md` —— 现有脚本逐条审阅结论（含 4 个待修点）
 - `docs/ROADMAP.md` —— 分阶段计划
 - `docs/ENV.md` —— 两台机器的环境事实

@@ -28,7 +28,7 @@ from mavsdk import System
 # 数传电台通常是 57600："serial://COM5:57600"
 # 飞控 USB 直连通常是 115200："serial://COM5:115200"
 # 端口号看 设备管理器 -> 端口(COM 和 LPT)
-PORT = "serial://COM5:57600"
+PORT = "serial://COM6:115200"
 # =================================================
 
 T0 = time.time()

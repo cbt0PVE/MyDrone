@@ -40,7 +40,7 @@ from mavsdk.telemetry import FlightMode
 # 数传电台（SiK/3DR 之类）通常是 57600，写成 "serial://COM5:57600"
 # 飞控 USB 直连通常是 115200，写成 "serial://COM5:115200"
 # 端口号在设备管理器 -> 端口(COM 和 LPT) 里看；插拔不同 USB 口会变
-PORT = "serial://COM5:57600"
+PORT = "serial://COM6:115200"
 # =================================================
 
 # ============ 飞行参数 ============
