@@ -15,7 +15,8 @@ MyDrone/
 ├── devlogs/       # 人类向开发日志：调研、踩坑、算法大纲、采购清单
 ├── image/         # 文档配图
 ├── src/           # 仿真/视觉源码：test_mavsdk.py、test_opencv.py、main_tracker*.py
-├── vnav/          # 视觉导航控制包：config / vision / link / safety / control / mission
+├── sim/           # SITL 仿真：setup.sh（资产+建链）、run.sh（起仿真跑闭环）、worlds/
+├── vnav/          # 视觉导航控制包：config / camera / vision / link / safety / control / mission
 ├── tools/         # 数据集与模型工具：make_aruco / prepare_coco_person / train_yolo
 ├── tests/         # 冒烟测试（不接硬件也能跑）
 └── *.py           # 实物脚本：connection / takeoff / drone_track / hover_test / rc_monitor
@@ -62,6 +63,7 @@ MyDrone/
 ## 文档索引
 
 - `docs/STATUS.md` —— **当前进度与下一步（收工必更新）**
+- `docs/SITL_CAMERA.md` —— **SITL 相机视觉闭环**：怎么起、仿真内参怎么算、踩过的坑
 - `docs/AI_CONTEXT.md` —— 自包含的交接上下文，新对话直接整段粘贴
 - `docs/GIT_CHEATSHEET.md` —— 拉取/提交/推送与常见报错处理
 - `docs/PROJECT_CONTEXT.md` —— 硬件、链路、痛点根因、方案、标准流程

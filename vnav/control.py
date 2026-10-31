@@ -10,10 +10,11 @@
 """
 
 import asyncio
+import time
 
 from mavsdk.offboard import OffboardError, VelocityNedYaw
 
-from .vision import body_to_ned
+from .vision import body_to_ned, ned_climb_rate
 
 
 class OffboardController:
@@ -55,6 +56,24 @@ class OffboardController:
     async def hold(self, yaw_deg):
         """原地悬停：速度全零，但保持机头朝向。"""
         await self.send(0.0, 0.0, 0.0, yaw_deg)
+
+    async def climb_to(self, target_alt_m, state, timeout_s=25.0, tol_m=0.15):
+        """用速度指令爬到目标离地高度，返回是否到达。
+
+        注意符号：NED 里 **向下为正**，所以"要上升"要发负的 vd。
+        这一条在 tracking.py 里曾经写反过（高度低于目标却给正的 vd，
+        等于往下压），是 2026-10-31 在 SITL 里才暴露出来的。
+        """
+        cfg = self.cfg
+        period = 1.0 / cfg.control_hz
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < timeout_s:
+            err = target_alt_m - state.height_m
+            if abs(err) < tol_m:
+                return True
+            await self.send(0.0, 0.0, ned_climb_rate(err, cfg.max_climb_mps), state.yaw_deg)
+            await asyncio.sleep(period)
+        return False
 
     async def release(self):
         """交还控制权：先让 PX4 退出 Offboard，之后听遥控器的。"""

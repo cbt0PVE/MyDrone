@@ -63,10 +63,12 @@ class SafetyMonitor:
 
         return Action.CONTINUE, "正常"
 
-    def check_ready(self, state, health=None, bench=False):
+    def check_ready(self, state, health=None, bench=False, allow_disarmed=False):
         """起飞前自检。返回问题列表，空列表表示可以开始。
 
         bench=True 是台架/手持验证：飞机不在空中，所以不检查高度。
+        allow_disarmed=True 是给 SITL 自动起飞用的：此刻还在地面没解锁，
+        "未解锁/高度不够"正是接下来要主动做的事，不能当成自检失败。
         """
         cfg = self.cfg
         problems = []
@@ -75,9 +77,9 @@ class SafetyMonitor:
             problems.append("遥测没有数据")
         if state.battery_pct < cfg.min_battery_pct:
             problems.append(f"电量 {state.battery_pct*100:.0f}% 低于 {cfg.min_battery_pct*100:.0f}%")
-        if not state.armed:
+        if not state.armed and not allow_disarmed:
             problems.append("未解锁（本任务要求先由飞手起飞并切 Offboard）")
-        if not bench and state.alt_m < cfg.min_start_alt_m:
+        if not bench and not allow_disarmed and state.alt_m < cfg.min_start_alt_m:
             problems.append(f"高度 {state.alt_m:.2f}m 低于 {cfg.min_start_alt_m}m，先由飞手起飞")
 
         if health is not None:
@@ -86,3 +88,15 @@ class SafetyMonitor:
             if hasattr(health, "is_magnetometer_calibration_ok") and not health.is_magnetometer_calibration_ok:
                 problems.append("磁罗盘未校准")
         return problems
+
+
+def check_ready(cfg, state, health=None, bench=False, allow_disarmed=False):
+    """模块级便捷入口。
+
+    `run_tracking.py` 一直是按模块函数调用它的（`safety.check_ready(...)`），
+    而实际实现是 `SafetyMonitor` 的方法 —— 两边对不上，入口脚本一跑就
+    AttributeError。这里补一层转发，两个名字都能用。
+    """
+    return SafetyMonitor(cfg).check_ready(
+        state, health, bench=bench, allow_disarmed=allow_disarmed
+    )

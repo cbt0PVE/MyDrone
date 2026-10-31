@@ -19,7 +19,49 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from vnav.config import Config, load_camera_matrix  # noqa: E402
 from vnav.detectors import estimate_from_bbox  # noqa: E402
-from vnav.vision import ArucoTracker, PID, body_to_ned, camera_to_body  # noqa: E402
+from vnav.vision import (  # noqa: E402
+    ArucoTracker,
+    PID,
+    body_to_ned,
+    camera_to_body,
+    ned_climb_rate,
+)
+
+
+def test_sitl_intrinsics():
+    """SITL 相机内参必须由 hfov 精确算出：1280 宽 hfov=1.74 -> fx≈540，640 宽则减半。"""
+    from vnav.camera import gazebo_intrinsics, is_gazebo_source
+
+    assert abs(gazebo_intrinsics(1.74, 1280, 1280) - 539.9) < 0.2
+    assert abs(gazebo_intrinsics(1.74, 1280, 640) - 269.97) < 0.2
+
+    # 配置切到仿真后，load_camera_matrix 应走仿真分支、且不受 calib.json 影响
+    cfg = Config()
+    cfg.camera_source = "gazebo"
+    cfg.frame_width, cfg.frame_height = 640, 480
+    K, dist, note = load_camera_matrix(cfg)
+    assert abs(K[0, 0] - 269.97) < 0.2
+    assert abs(K[0, 2] - 320.0) < 1e-9 and abs(K[1, 2] - 240.0) < 1e-9
+    assert np.allclose(dist, 0)  # 仿真无畸变
+    assert "SITL" in note
+    assert is_gazebo_source("gazebo") and is_gazebo_source("gz:/world/x/image")
+    assert not is_gazebo_source(0) and not is_gazebo_source("http://1.2.3.4/video")
+
+
+def test_altitude_sign():
+    """高度符号回归测试：低于目标高度时必须给**负**的 NED 垂直速度（上升）。
+
+    这条曾经写反过：SITL 里一上电就往地里压。台架/手持都发现不了。
+    """
+    # 低于目标 0.5m -> 要上升 -> vd < 0
+    assert ned_climb_rate(+0.5, 0.4) < 0
+    # 高于目标 0.5m -> 要下降 -> vd > 0
+    assert ned_climb_rate(-0.5, 0.4) > 0
+    # 正好在目标高度 -> 不动
+    assert ned_climb_rate(0.0, 0.4) == 0.0
+    # 限幅
+    assert abs(ned_climb_rate(100.0, 0.4)) == 0.4
+    assert abs(ned_climb_rate(-100.0, 0.4)) == 0.4
 
 
 def test_body_to_ned():

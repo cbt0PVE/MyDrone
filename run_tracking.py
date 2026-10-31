@@ -18,6 +18,7 @@
 """
 
 import argparse
+import asyncio
 import sys
 import time
 
@@ -28,7 +29,7 @@ for _stream in (sys.stdout, sys.stderr):
         pass
 
 from vnav import link, safety
-from vnav.config import Config, load_camera_matrix, parse_camera_source
+from vnav.config import Config, apply_sitl_preset, load_camera_matrix, parse_camera_source
 from vnav.control import OffboardController
 from vnav.detectors import build_detector
 from vnav.tracking import TrackingMission
@@ -51,6 +52,17 @@ def parse_args():
     ap.add_argument("--bench", action="store_true", help="手持/台架：不改变高度")
     ap.add_argument("--no-arm", action="store_true", help="只跑视觉，不连飞控")
     ap.add_argument("--no-window", action="store_true", help="不弹识别窗口")
+    ap.add_argument(
+        "--sitl",
+        action="store_true",
+        help="SITL 仿真：Gazebo 相机 + udp://:14540 + 脚本自动起飞（配合 sim/run.sh）",
+    )
+    ap.add_argument(
+        "--auto-takeoff",
+        action="store_true",
+        help="脚本自己解锁并爬到 --alt（SITL 默认开；实机默认关，仍由飞手起飞）",
+    )
+    ap.add_argument("--duration", type=float, default=0.0, help="跑多少秒后自动降落，0=一直跑")
     return ap.parse_args()
 
 
@@ -77,6 +89,9 @@ async def visual_only(cfg):
 
 async def run(args):
     cfg = Config()
+    # 先套 SITL 预设，再让命令行覆盖——这样 --port/--camera 在仿真里也能临时改
+    if args.sitl:
+        apply_sitl_preset(cfg)
     if args.port:
         cfg.port = args.port
     if args.camera:
@@ -89,12 +104,17 @@ async def run(args):
         cfg.hover_alt_m = args.alt
     cfg.show_window = not args.no_window
 
+    auto_takeoff = args.sitl or args.auto_takeoff
+
     log("======== 配置 ========")
     log(f"  端口       {cfg.port}")
+    log(f"  摄像头     {cfg.camera_source}")
     log(f"  检测器     {cfg.detector} | 权重 {cfg.yolo_weights}")
     log(f"  相机安装   {cfg.camera_mount} | 人高先验 {cfg.person_height_m:.2f} m")
     log(f"  追踪距离   {cfg.track_distance_m:.2f} m")
     log(f"  高度       {cfg.hover_alt_m:.2f} m")
+    if auto_takeoff:
+        log("  起飞       脚本自动解锁爬升（SITL 模式）")
     log(f"  模式       {'只跑视觉' if args.no_arm else ('手持验证' if args.bench else '实飞追踪')}")
     log("======================")
 
@@ -125,7 +145,9 @@ async def run(args):
         log(f"当前状态：模式 {link.describe_mode(state)} | 解锁 {state.armed} | "
             f"高度 {state.height_m:.2f}m（{state.height_source}）")
 
-        problems = safety.check_ready(state, health, bench=args.bench)
+        problems = safety.check_ready(
+            cfg, state, health, bench=args.bench, allow_disarmed=auto_takeoff
+        )
         if problems:
             log("[X] 自检未通过：")
             for p in problems:
@@ -133,11 +155,38 @@ async def run(args):
             return 2
 
         controller = OffboardController(drone, cfg, log=log)
-        await controller.start()
-        await asyncio.sleep(0.5)
-        if not state.offboard:
-            log("[X] 切模式后仍不在 OFFBOARD，检查 RC_MAP_OFFB_SW / 开关位置")
-            return 3
+
+        if auto_takeoff:
+            # SITL 里没人替我们起飞，所以脚本自己来：
+            #   解锁 -> 预热 setpoint 并切 OFFBOARD -> 用速度指令爬到目标高度
+            log("自动起飞：解锁 ...")
+            try:
+                await asyncio.wait_for(drone.action.arm(), 10)
+            except Exception as e:
+                log(f"[X] 解锁失败：{e}")
+                return 3
+            for _ in range(20):
+                if state.armed:
+                    break
+                await asyncio.sleep(0.25)
+            if not state.armed:
+                log("[X] 发了 arm 但没等到 ARMED，中止（不要硬来）")
+                return 3
+            log("[OK] 已解锁")
+
+            await controller.start()
+            log(f"爬升到 {cfg.hover_alt_m:.2f} m ...")
+            reached = await controller.climb_to(cfg.hover_alt_m, state, timeout_s=30.0)
+            log(
+                f"{'[OK] 到达目标高度' if reached else '[!] 爬升未收敛，继续但留意高度'}"
+                f" | 当前 {state.height_m:.2f} m（{state.height_source}）"
+            )
+        else:
+            await controller.start()
+            await asyncio.sleep(0.5)
+            if not state.offboard:
+                log("[X] 切模式后仍不在 OFFBOARD，检查 RC_MAP_OFFB_SW / 开关位置")
+                return 3
 
         monitor = safety.SafetyMonitor(cfg)
         mission = TrackingMission(
@@ -146,8 +195,19 @@ async def run(args):
         log("")
         log("开始追踪。遥控器随时可接管；Ctrl+C 退出。")
         log("")
-        await mission.run()
+        if args.duration and args.duration > 0:
+            try:
+                await asyncio.wait_for(mission.run(), args.duration)
+            except asyncio.TimeoutError:
+                log(f"到达设定时长 {args.duration:.0f}s，准备降落")
+        else:
+            await mission.run()
         log(f"任务结束，最终状态：{mission.phase.value}")
+
+        # 只有还握着控制权时才自己降落；已经交还人工/已经落了就别多事
+        if controller.started:
+            await controller.land()
+            await asyncio.sleep(1.0)
         return 0
 
     except KeyboardInterrupt:

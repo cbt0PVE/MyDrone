@@ -135,11 +135,169 @@ class YoloDetector:
         )
 
 
+class OnnxDetector:
+    """YOLOv8 的 ONNX 推理，只用 onnxruntime + OpenCV。
+
+    为什么单独写一个而不是让 ultralytics 去读 .onnx：
+        ultralytics 会把 torch 一起拖进来（CPU 版也几百 MB）。机载电脑
+        （香橙派 5 Pro）上最终要转 RKNN，用不到 torch；WSL 仿真里更没必要。
+        这套"letterbox -> 推理 -> 解码 -> NMS"的流程和上板前处理是一致的。
+
+    与 YoloDetector 的差别：**没有 ByteTrack ID**（id 恒为 -1）。
+        单目标场景（课程的三类场景都是单目标）不受影响；多目标交叉时
+        需要换成带跟踪的实现。
+    """
+
+    NMS_IOU = 0.45
+
+    def __init__(self, cfg, camera_matrix):
+        self.cfg = cfg
+        self.K = camera_matrix
+        self._session = None
+        self._input_name = None
+        self._input_hw = None
+
+    def _load(self):
+        if self._session is not None:
+            return self._session
+        try:
+            import onnxruntime as ort
+        except ImportError as e:
+            raise ImportError(
+                "要跑 .onnx 需要 onnxruntime：pip install onnxruntime"
+            ) from e
+
+        sess = ort.InferenceSession(
+            str(self.cfg.yolo_weights), providers=["CPUExecutionProvider"]
+        )
+        inp = sess.get_inputs()[0]
+        self._input_name = inp.name
+        # 形如 [1, 3, 640, 640]；用模型自带的尺寸，不写死 640
+        h, w = int(inp.shape[2]), int(inp.shape[3])
+        self._input_hw = (h, w)
+        self._session = sess
+        return sess
+
+    # ---------------- 前处理 ----------------
+
+    def _letterbox(self, frame, new_hw):
+        """等比缩放 + 灰边填充。返回 (blob, scale, pad_x, pad_y)。"""
+        import cv2
+
+        new_h, new_w = new_hw
+        h, w = frame.shape[:2]
+        scale = min(new_w / w, new_h / h)
+        rw, rh = int(round(w * scale)), int(round(h * scale))
+        resized = cv2.resize(frame, (rw, rh), interpolation=cv2.INTER_LINEAR)
+
+        canvas = np.full((new_h, new_w, 3), 114, dtype=np.uint8)
+        pad_x, pad_y = (new_w - rw) // 2, (new_h - rh) // 2
+        canvas[pad_y:pad_y + rh, pad_x:pad_x + rw] = resized
+
+        blob = canvas[:, :, ::-1].astype(np.float32) / 255.0  # BGR->RGB, 归一化
+        blob = np.transpose(blob, (2, 0, 1))[None]  # NCHW
+        return blob, scale, pad_x, pad_y
+
+    # ---------------- 后处理 ----------------
+
+    @staticmethod
+    def _decode(output, conf_thres, num_classes):
+        """把 YOLOv8 输出解成 (boxes_xyxy, scores)。
+
+        导出格式有两种，都要兼容：
+            (1, 4+nc, 8400)  -> 转置后每行一个候选
+            (1, 8400, 4+nc)
+        单类模型的输出是 (1, 5, 8400)：4 个框参数 + 1 个类别分数。
+        """
+        pred = np.asarray(output)
+        if pred.ndim == 3:
+            pred = pred[0]
+        if pred.shape[0] < pred.shape[1] and pred.shape[0] <= 4 + num_classes + 1:
+            pred = pred.T  # (4+nc, N) -> (N, 4+nc)
+
+        boxes_cxcywh = pred[:, :4]
+        class_scores = pred[:, 4:]
+        if class_scores.shape[1] == 0:
+            return np.zeros((0, 4), np.float32), np.zeros((0,), np.float32)
+
+        best_cls = np.argmax(class_scores, axis=1)
+        best_score = class_scores[np.arange(len(class_scores)), best_cls]
+        keep = best_score >= conf_thres
+        if not np.any(keep):
+            return np.zeros((0, 4), np.float32), np.zeros((0,), np.float32)
+
+        b = boxes_cxcywh[keep]
+        s = best_score[keep]
+        cx, cy, bw, bh = b[:, 0], b[:, 1], b[:, 2], b[:, 3]
+        xyxy = np.stack([cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2], axis=1)
+        return xyxy.astype(np.float32), s.astype(np.float32)
+
+    # ---------------- 主流程 ----------------
+
+    def detect(self, frame):
+        if frame is None:
+            return None
+        import cv2
+
+        sess = self._load()
+        blob, scale, pad_x, pad_y = self._letterbox(frame, self._input_hw)
+        outputs = sess.run(None, {self._input_name: blob})
+
+        # 单类 person 模型：nc = 1
+        num_classes = max(1, int(outputs[0].shape[1]) - 4) if outputs[0].ndim == 3 else 1
+        xyxy, scores = self._decode(outputs[0], self.cfg.yolo_conf, num_classes)
+        if len(xyxy) == 0:
+            return None
+
+        # 还原到原图坐标（去掉 padding、除以缩放比）
+        xyxy[:, [0, 2]] = (xyxy[:, [0, 2]] - pad_x) / scale
+        xyxy[:, [1, 3]] = (xyxy[:, [1, 3]] - pad_y) / scale
+        xyxy[:, [0, 2]] = np.clip(xyxy[:, [0, 2]], 0, frame.shape[1] - 1)
+        xyxy[:, [1, 3]] = np.clip(xyxy[:, [1, 3]], 0, frame.shape[0] - 1)
+
+        # NMS：cv2 要的是 (x, y, w, h)
+        rects = [[float(x2 - x1), float(y2 - y1), float(x1), float(y1)]
+                 for x1, y1, x2, y2 in xyxy]
+        idxs = cv2.dnn.NMSBoxes(rects, scores.tolist(), self.cfg.yolo_conf, self.NMS_IOU)
+        if len(idxs) == 0:
+            return None
+        idxs = np.array(idxs).flatten().tolist()
+
+        # 取最大的框（离得最近）当主目标，和 YoloDetector 的取舍一致
+        heights = [rects[i][1] for i in idxs]
+        pick = idxs[int(np.argmax(heights))]
+        x1, y1, x2, y2 = xyxy[pick]
+        cx, cy = (x1 + x2) / 2.0, (y1 + y2) / 2.0
+        h_px = float(y2 - y1)
+
+        pose = estimate_from_bbox(
+            cx, cy, h_px, self.K, self.cfg.person_height_m, self.cfg.camera_mount
+        )
+        if pose is None:
+            return None
+        forward, right, down = pose
+
+        return Detection(
+            marker_id=-1,  # 没有跟踪器，不给稳定 ID
+            center_px=(float(cx), float(cy)),
+            forward_m=forward,
+            right_m=right,
+            down_m=down,
+            yaw_deg=0.0,
+            tvec=np.array([right, down, forward], dtype=float),
+        )
+
+
 def build_detector(cfg, camera_matrix, dist_coeffs):
     """按配置返回检测器实例。两者都提供 .detect(frame) 接口。"""
     if cfg.detector == "aruco":
         from .vision import ArucoTracker
 
         return ArucoTracker(cfg, camera_matrix, dist_coeffs)
+
+    # .onnx 走纯 onnxruntime，不需要装 ultralytics/torch。
+    # 这条路径和香橙派上板（ONNX -> RKNN）是同一套前处理，所以不是临时方案。
+    if str(cfg.yolo_weights).lower().endswith(".onnx"):
+        return OnnxDetector(cfg, camera_matrix)
 
     return YoloDetector(cfg, camera_matrix)

@@ -16,6 +16,7 @@ import time
 from enum import Enum
 
 from .safety import Action
+from .vision import ned_climb_rate
 
 
 class Phase(Enum):
@@ -91,12 +92,14 @@ class TrackingMission:
     def _command(self, det):
         cfg = self.cfg
 
-        # 高度保持：和目标大致同高，太高会看不到人
+        # 高度保持：和目标大致同高，太高会看不到人。
+        # 符号提醒：NED 向下为正，"低于目标高度"要发**负**的 vd 才会爬升。
+        # 这里原来写的是 +0.8*err（偏低反而往下压），SITL 里一上电就会往地里钻。
         if self.bench:
             v_down = 0.0
         else:
             err_alt = cfg.hover_alt_m - self.state.height_m
-            v_down = max(-cfg.max_climb_mps, min(cfg.max_climb_mps, 0.8 * err_alt))
+            v_down = ned_climb_rate(err_alt, cfg.max_climb_mps)
 
         if det is None:
             if self.phase is not Phase.SEARCH:

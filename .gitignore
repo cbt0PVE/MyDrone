@@ -54,6 +54,10 @@ venv/
 
 # === 本机专属配置，不入库 ===
 local/
+# 临时探针脚本与日志（WSL 里跑的一次性命令都放这里）
+.scratch/
+# 仿真资产：Fuel 下载的人形模型（几 MB 二进制，各机器 sim/setup.sh 自取）
+sim/assets/
 *.local.md
 .env
 

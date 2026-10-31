@@ -199,6 +199,20 @@ def camera_to_body(tvec, signs=(1.0, -1.0, 1.0)):
     return forward, right, down
 
 
+def ned_climb_rate(err_alt_m, max_rate_mps, gain=0.8):
+    """高度误差 -> NED 垂直速度（向下为正）。
+
+    **这是本项目最容易写反的一处符号。** 抄自 2026-10-31 的真实教训：
+    `tracking.py` 原来写的是 `+0.8*err`，也就是"高度低于目标时继续下降"，
+    SITL 一上电就会往地里钻，而且台架上完全看不出来。
+
+    约定：err_alt = 目标高度 - 当前高度，所以 err>0 表示"要上升"，
+    而 NED 里上升是负速度，因此结果取负。
+    """
+    rate = max(-max_rate_mps, min(max_rate_mps, gain * err_alt_m))
+    return -float(rate)
+
+
 def body_to_ned(v_forward, v_right, v_down, yaw_deg):
     """机体速度 -> NED 速度。
 
@@ -298,13 +312,11 @@ class VisionWorker:
     # ---------------- 生命周期 ----------------
 
     def start(self):
-        # camera_source 可以是序号（0/1）也可以是视频流地址（手机当摄像头）
-        self.cap = cv2.VideoCapture(self.cfg.camera_source)
-        if not self.cap.isOpened():
-            raise RuntimeError(f"打不开摄像头 {self.cfg.camera_source!r}")
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.cfg.frame_width)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.cfg.frame_height)
+        # 取图源由 vnav/camera.py 决定：本地摄像头 / 网络流 / Gazebo 仿真话题。
+        # 换成 SITL 只需要改 cfg.camera_source，这里的代码一行都不用动。
+        from .camera import open_camera
 
+        self.cap = open_camera(self.cfg)
         self._running = True
         self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
