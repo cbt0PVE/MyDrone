@@ -50,8 +50,9 @@ async def read_health(drone, timeout=3.0):
 class TelemetryState:
     """飞控状态快照。所有字段都由后台任务持续刷新。"""
 
-    def __init__(self, rangefinder_timeout_s: float = 1.0):
+    def __init__(self, rangefinder_timeout_s: float = 1.0, rangefinder_min_valid_m: float = 0.15):
         self.rangefinder_timeout_s = rangefinder_timeout_s
+        self.rangefinder_min_valid_m = rangefinder_min_valid_m
         self.mode = None
         self.armed = False
         self.alt_m = 0.0
@@ -103,16 +104,23 @@ class TelemetryState:
 
     @property
     def range_valid(self):
-        """激光数据是否可用：有值、没超时、且落在量程内。
+        """激光数据是否可用。
 
-        为什么要检查量程：TFmini 在超出 0.1~12m 时会输出 0 或饱和值，
-        如果直接拿来当高度，飞控会以为"贴地了"而做错误修正。
+        四道检查，缺一不可：
+          1. 有数据、且 1 秒内更新过（防止拿旧值）；
+          2. 落在量程内（超量程时 TFmini 会输出 0 或饱和值）；
+          3. 高于"最小可信高度"（默认 0.15m）——传感器被机身挡住、对着镜面或
+             贴地时，读数会钳在量程下限 0.10，这个值"在量程内"但完全不可信，
+             直接当年高度会让飞机以为已经落地；
+          4. 下面还会和气压计做一次合理性检查（见 height_m 的说明）。
         """
         if self.dist_m is None:
             return False
         if time.monotonic() - self.dist_update > self.rangefinder_timeout_s:
             return False
         if self.dist_max > 0 and not (self.dist_min <= self.dist_m <= self.dist_max):
+            return False
+        if self.dist_m < self.rangefinder_min_valid_m:
             return False
         return True
 

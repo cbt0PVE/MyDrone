@@ -96,6 +96,14 @@ async def printer(st):
             flag = "" if in_range else "  <-- 超出量程，PX4 会判为无效"
             text = f"激光 {dist:5.2f} m（量程 {dmin:.2f}~{dmax:.2f}）{flag}"
 
+            # 读数一直贴着量程下限 = 传感器被挡住/没打到地面，这是最常见的假数据
+            if dmin and dist <= dmin + 0.02:
+                st["low"] = st.get("low", 0) + 1
+                if st["low"] == 10:
+                    text += "  <-- 贴着量程下限：镜头被挡 / 朝向偏了 / 对着镜面或深色地面"
+            else:
+                st["low"] = 0
+
         if alt is not None:
             text += f" | 气压计 {alt:5.2f} m"
             if dist is not None and age <= 2 and abs(dist - alt) > 1.0:

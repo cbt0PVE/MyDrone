@@ -40,6 +40,8 @@ class Config:
     # 高度源：True = 优先用 TFmini 激光（离地高度），失效时自动回退气压计
     use_rangefinder: bool = True
     rangefinder_timeout_s: float = 1.0  # 激光数据超过这么久没更新就判为失效
+    # 低于这个高度视为不可信（传感器被挡住/贴地时会钳在量程下限 0.10）
+    rangefinder_min_valid_m: float = 0.15
 
     # ---------------- 对准判定 ----------------
     align_tolerance_m: float = 0.10  # 水平误差小于 10cm 算对正

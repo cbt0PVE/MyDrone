@@ -92,7 +92,10 @@ async def run(args):
         log("连接飞控 ...")
         drone = await link.connect(cfg.port, cfg.connect_timeout_s, log=log)
 
-        state = link.TelemetryState(rangefinder_timeout_s=cfg.rangefinder_timeout_s)
+        state = link.TelemetryState(
+            rangefinder_timeout_s=cfg.rangefinder_timeout_s,
+            rangefinder_min_valid_m=cfg.rangefinder_min_valid_m,
+        )
         state.start(drone)
         await asyncio.sleep(2.0)  # 等遥测回填
 
