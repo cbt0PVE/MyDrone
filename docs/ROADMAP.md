@@ -60,9 +60,11 @@ python tools/train_yolo.py               # 训练 50 epoch + 验证 + 导出 ONN
 
 ### 已有硬件、可先做：第 8 周准备
 
-- [ ] 检测器抽象：`Detector` 接口 + `ArucoDetector` + `YoloDetector`
-- [ ] 统一输出 `Detection`（机体前/右/下），`mission` / `safety` 不用改
+- [x] 检测器抽象：`build_detector()` + `ArucoTracker` + `YoloDetector`，输出统一 `Detection`
+- [x] 追踪任务：`vnav/tracking.py`（保持距离 + 画面居中 + 丢目标交还）
+- [x] 入口：`run_tracking.py`（`--no-arm` 纯视觉 / `--bench` 手持 / 默认实飞）
 - [ ] 地面手持验证：手机当摄像头，验方向与丢目标交还
+- [ ] 三类场景（静态 / 匀速 / 部分遮挡）各录一段，作为验收素材
 
 ## 四、必须先定的一件事：检测器要可插拔
 

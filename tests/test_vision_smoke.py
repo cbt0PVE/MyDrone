@@ -18,6 +18,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from vnav.config import Config, load_camera_matrix  # noqa: E402
+from vnav.detectors import estimate_from_bbox  # noqa: E402
 from vnav.vision import ArucoTracker, PID, body_to_ned, camera_to_body  # noqa: E402
 
 
@@ -65,6 +66,22 @@ def test_pid_basic():
     # 死区内不动作
     pid3 = PID(kp=1.0, ki=0.0, kd=0.0, out_limit=1.0, deadband=0.1)
     assert pid3.update(0.05, 0.05) == 0.0
+
+
+def test_estimate_from_bbox():
+    """单目测距：深度 = fy * 真实高度 / 框高，横向偏差按相似三角形换算。"""
+    K = np.array([[500, 0, 320], [0, 500, 240], [0, 0, 1]], dtype=float)
+
+    fwd, right, down = estimate_from_bbox(320, 240, 250, K, 1.7, mount="forward")
+    assert abs(fwd - 3.4) < 1e-6
+    assert abs(right) < 1e-6 and abs(down) < 1e-6
+
+    _, right, _ = estimate_from_bbox(370, 240, 250, K, 1.7, mount="forward")
+    assert abs(right - 0.34) < 1e-6
+
+    fwd, _, down = estimate_from_bbox(320, 290, 250, K, 1.7, mount="down")
+    assert abs(down - 3.4) < 1e-6
+    assert abs(fwd + 50 * 3.4 / 500) < 1e-6
 
 
 def test_aruco_detect_synthetic():

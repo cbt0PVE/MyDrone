@@ -19,7 +19,8 @@
 - 通读早期三个脚本，结论见 `docs/CODE_NOTES.md`。
 - 2026-10-27 实测 WSL 仿真链路：PX4 SITL（`gz_x500`）启动成功，MAVSDK `udp://:14540` 1.1 秒连上，见 `docs/SITL_GUIDE.md`。
 - 2026-10-27 **第 3 周训练完成**：YOLOv8n 单类 person，mAP@0.5 = **0.7526**，mAP@0.5:0.95 = 0.4983；4060 上 66.3 FPS（PyTorch）/ 45.7 FPS（ONNX-CPU）。产物与图表见 `docs/WEEK3_RESULTS.md`。
-- 2026-10-31 **TFmini-S 已接入，驱动能读到数据**；待做 `EKF2_HGT_REF=2` + `EKF2_RNG_CTRL=2` 让 EKF 以激光为主高度源（见 `docs/PX4_PARAMS.md` 第 4 节）。代码侧 `TelemetryState.height_m` 已改为激光优先、气压计兜底；新增 `tfmini_check.py` 自检。
+- 2026-10-31 **YOLO 接入 vnav**：`vnav/detectors.py`（单目测距 + ByteTrack ID）、`vnav/tracking.py`（追踪任务）、`run_tracking.py`（纯视觉 / 手持 / 实飞三种模式）。冒烟测试 5/5 通过；在真实 COCO 图上跑出 2.8–8.2m 的距离估计。
+- 2026-10-31 **TFmini-S 已接入**，`hover_test.py` 控高改为激光优先、气压计兜底（日志标注 laser/baro），实飞验证 0.48→0.91m 定高成功；`tfmini_check.py` 可做接线自检。
 - 双机环境采集，见 `docs/ENV.md`（Windows 台式机 = 实机调试；Mac = 文档/代码，不维护 SITL）。
 - **RC/Offboard 调试工具**：`rc_monitor.py`（只读监视）、`hover_test.py`（1 米悬停，可 Ctrl+C / 遥控器接管）。端口写在文件顶部 `PORT`。
 - **RC 开关配置手册**：`docs/RC_OFFBOARD_SETUP.md`（含参数表、验证清单、排查顺序）。

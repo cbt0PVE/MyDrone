@@ -32,6 +32,23 @@ class Config:
     aruco_dict: str = "DICT_4X4_50"
     show_window: bool = True  # 是否弹窗显示识别画面（机载电脑上关掉）
 
+    # ---------------- 检测器选择 ----------------
+    # "aruco" = 已知尺寸标签，PnP 精确解算（用于降落/标定）
+    # "yolo"  = 训练好的人体检测，单目测距（用于追踪）
+    detector: str = "yolo"
+    yolo_weights: str = "runs/detect/runs/detect/coco_person/weights/best.pt"
+    yolo_conf: float = 0.35
+    target_class: int = 0  # 单类模型里 person 就是 0
+    # 相机安装方向：forward = 朝前（追人用），down = 朝下（降落用）
+    camera_mount: str = "forward"
+
+    # 单目测距用的先验尺寸：人有多高。按人群取平均，误差直接换算成距离误差。
+    person_height_m: float = 1.70
+    # 追踪时希望保持的距离（目标在画面里的大小对应这个距离）
+    track_distance_m: float = 2.5
+    kp_distance: float = 0.8  # 距离误差 -> 前后速度
+    kp_center: float = 1.2  # 画面横向偏差 -> 左右速度
+
     # ---------------- 飞行高度 ----------------
     hover_alt_m: float = 1.0  # 起飞后先爬到的高度
     descend_stop_alt_m: float = 0.35  # 降到这个高度就交给 PX4 自己落地
