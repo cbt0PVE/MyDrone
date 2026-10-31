@@ -124,6 +124,15 @@ async def main(port) -> int:
         log("[X] 15 秒没有心跳。检查端口 / 波特率 / QGC 是否占用串口")
         return 1
 
+    # 固件版本很关键：PX4 1.15 之后取消了 EKF2_HGT_REF，高度源改为自动选择，
+    # 参数建议完全不同，所以先把版本打出来。
+    try:
+        v = await asyncio.wait_for(drone.info.get_version(), 3)
+        log(f"固件：PX4 {v.flight_sw_major}.{v.flight_sw_minor}.{v.flight_sw_patch} "
+            f"git={v.flight_sw_git_hash[:8]}")
+    except Exception:
+        log("固件版本读取失败（不影响后续测距检查）")
+
     log("[OK] 已连接。现在用手在传感器下方上下移动，观察读数是否跟着变")
     log("")
 
