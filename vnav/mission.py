@@ -134,7 +134,8 @@ class VisualLandingMission:
     def _command(self, det, dt):
         """根据当前阶段返回 (前向速度, 右向速度, 向下速度)。"""
         cfg = self.cfg
-        alt = self.state.alt_m
+        # 优先用激光（离地高度），失效时自动回退气压计
+        alt = self.state.height_m
 
         # 悬停高度保持：高度误差 -> 垂直速度（正数向上，所以取负号给 NED）
         # 台架/手持模式下飞控并没有真的在空中，绝不能给爬升指令，
@@ -223,8 +224,8 @@ class VisualLandingMission:
                 f"(陈旧{age:.2f}s)"
             )
         self.log(
-            f"[{self.phase.value}] 高 {self.state.alt_m:4.2f}m | {target} | "
-            f"指令 前{v_fwd:+.2f} 右{v_right:+.2f} 下{v_down:+.2f} m/s"
+            f"[{self.phase.value}] 高 {self.state.height_m:4.2f}m({self.state.height_source}) | "
+            f"{target} | 指令 前{v_fwd:+.2f} 右{v_right:+.2f} 下{v_down:+.2f} m/s"
         )
 
     def _log_throttled(self, msg):

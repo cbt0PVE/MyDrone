@@ -92,13 +92,14 @@ async def run(args):
         log("连接飞控 ...")
         drone = await link.connect(cfg.port, cfg.connect_timeout_s, log=log)
 
-        state = link.TelemetryState()
+        state = link.TelemetryState(rangefinder_timeout_s=cfg.rangefinder_timeout_s)
         state.start(drone)
         await asyncio.sleep(2.0)  # 等遥测回填
 
         health = await link.read_health(drone)
         log(f"当前状态：模式 {link.describe_mode(state)} | 解锁 {state.armed} | "
-            f"高度 {state.alt_m:.2f}m | RC {'在线' if state.rc_available else '未知'}")
+            f"高度 {state.height_m:.2f}m（{state.height_source}） | "
+            f"RC {'在线' if state.rc_available else '未知'}")
 
         # ---------- 4. 航前自检 ----------
         problems = safety.check_ready(state, health, bench=args.bench)

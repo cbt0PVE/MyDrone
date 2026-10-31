@@ -55,3 +55,42 @@ Offboard 数据停 ──> Offboard Loss (COM_OF_LOSS_T) ──> COM_OBL_RC_ACT
 6. [ ] 拨回常规位，模式立刻退出 Offboard。
 7. [ ] 打杆测试：Offboard 中推杆能抢回（确认 `COM_RC_OVERRIDE` 位掩码是否覆盖 Offboard）。
 8. [ ] 拔掉接收机（模拟 RC 丢失），确认 `NAV_RCL_ACT` 行为符合预期。
+
+---
+
+## 4. TFmini-S 作为主高度源
+
+前提：驱动已经能读到数据（`DISTANCE_SENSOR` 有值）。剩下的是**让 EKF 以它为主**。
+
+### 4.1 三个关键参数
+
+| 参数 | 值 | 作用 | 备注 |
+| --- | --- | --- | --- |
+| `SENS_TFMINI_CFG` | 对应串口 | 告诉 PX4 激光接在哪个口 | 已配置好，QGC 下拉框选 |
+| `EKF2_HGT_REF` | **`2`（Range sensor）** | 把主高度参考从气压计改成测距 | **这是"变成默认依赖"的核心** |
+| `EKF2_RNG_CTRL` | **`2`（Always）** | 测距始终参与融合，不设条件 | 1 = 有条件才用 |
+| `EKF2_MIN_RNG` | `0.1` | 融合用的最小距离 | 和 TFmini 下限对齐 |
+
+改完**重启飞控**。
+
+### 4.2 怎么确认它真的生效了
+
+光看 `DISTANCE_SENSOR` 有数只证明"驱动通了"，不证明"EKF 在用"。三种验证：
+
+1. **QGC MAVLink Inspector** → 看 `ESTIMATOR_STATUS` 里 `hagl_ratio` 接近 1；
+2. **手动遮挡**：手贴着传感器前后移动，观察 QGC 里的高度估计（`vehicle_local_position.z` 或仪表）是否跟着变。如果高度纹丝不动、只有 `DISTANCE_SENSOR` 在跳，说明没融合；
+3. **看我们自己的脚本**：`python tfmini_check.py`，同时打印激光与气压计，判断两者差异是否合理。
+
+### 4.3 必须知道的边界
+
+- **量程 0.1–12m**。超出后 TFmini 输出 0 或饱和值，EKF 会判为无效。飞行高度别接近 12m。
+- **倾斜会测斜距**。姿态角大时激光测的是斜线距离，不是垂直高度。
+- **地面材质**：深色地毯、镜面、水面、玻璃会失锁或跳变。
+- **空中断激光**：`EKF2_HGT_REF=2` 时若激光失效，EKF 会告警并退到气压计，高度会突然跳。所以室内短程飞行才适合把 range 设为主源；要飞高或飞复杂地面时，改回 `EKF2_RNG_CTRL=1`（条件融合）更稳。
+
+### 4.4 代码侧
+
+`vnav/link.py` 的 `TelemetryState.height_m` 已改为：**优先激光，超量程/超时自动回退气压计**，
+日志里会显示 `高 1.02m(laser)` 或 `高 1.05m(baro)`。
+
+`tfmini_check.py` 用来做接线自检：同时打印激光、量程、气压计高度和模式。

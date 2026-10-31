@@ -50,7 +50,8 @@ async def read_health(drone, timeout=3.0):
 class TelemetryState:
     """飞控状态快照。所有字段都由后台任务持续刷新。"""
 
-    def __init__(self):
+    def __init__(self, rangefinder_timeout_s: float = 1.0):
+        self.rangefinder_timeout_s = rangefinder_timeout_s
         self.mode = None
         self.armed = False
         self.alt_m = 0.0
@@ -58,6 +59,11 @@ class TelemetryState:
         self.rc_available = False
         self.battery_pct = 1.0
         self.last_update = 0.0  # 最近一次收到任何遥测的 time.monotonic()
+        # 激光测距（TFmini-S）：PX4 把它作为 DISTANCE_SENSOR 发出来
+        self.dist_m = None
+        self.dist_min = 0.0
+        self.dist_max = 0.0
+        self.dist_update = 0.0
         self._tasks = []
 
     # ---------------- 生命周期 ----------------
@@ -71,6 +77,7 @@ class TelemetryState:
             asyncio.create_task(self._watch_attitude(drone)),
             asyncio.create_task(self._watch_rc(drone)),
             asyncio.create_task(self._watch_battery(drone)),
+            asyncio.create_task(self._watch_distance(drone)),
         ]
         return self._tasks
 
@@ -92,7 +99,45 @@ class TelemetryState:
     def offboard(self):
         return self.mode == FlightMode.OFFBOARD
 
+    # ---------------- 高度源选择 ----------------
+
+    @property
+    def range_valid(self):
+        """激光数据是否可用：有值、没超时、且落在量程内。
+
+        为什么要检查量程：TFmini 在超出 0.1~12m 时会输出 0 或饱和值，
+        如果直接拿来当高度，飞控会以为"贴地了"而做错误修正。
+        """
+        if self.dist_m is None:
+            return False
+        if time.monotonic() - self.dist_update > self.rangefinder_timeout_s:
+            return False
+        if self.dist_max > 0 and not (self.dist_min <= self.dist_m <= self.dist_max):
+            return False
+        return True
+
+    @property
+    def height_m(self):
+        """控制用的高度：优先激光（离地高度），无效时回退气压计。
+
+        注意：激光给的是 AGL（离地），气压计是相对起飞点。室内地面平坦时两者近似，
+        但地面有台阶/桌面时含义不同——这正是要优先用激光的原因。
+        """
+        return self.dist_m if self.range_valid else self.alt_m
+
+    @property
+    def height_source(self):
+        return "laser" if self.range_valid else "baro"
+
     # ---------------- 各个后台任务 ----------------
+
+    async def _watch_distance(self, drone):
+        async for d in drone.telemetry.distance_sensor():
+            self.dist_m = d.current_distance_m
+            self.dist_min = d.minimum_distance_m or 0.0
+            self.dist_max = d.maximum_distance_m or 0.0
+            self.dist_update = time.monotonic()
+            self.last_update = time.monotonic()
 
     async def _watch_mode(self, drone):
         async for mode in drone.telemetry.flight_mode():

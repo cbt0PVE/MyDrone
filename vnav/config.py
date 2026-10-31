@@ -37,6 +37,9 @@ class Config:
     descend_stop_alt_m: float = 0.35  # 降到这个高度就交给 PX4 自己落地
     descend_rate_mps: float = 0.25  # 下降速度（正数，内部取负）
     max_climb_mps: float = 0.4
+    # 高度源：True = 优先用 TFmini 激光（离地高度），失效时自动回退气压计
+    use_rangefinder: bool = True
+    rangefinder_timeout_s: float = 1.0  # 激光数据超过这么久没更新就判为失效
 
     # ---------------- 对准判定 ----------------
     align_tolerance_m: float = 0.10  # 水平误差小于 10cm 算对正
