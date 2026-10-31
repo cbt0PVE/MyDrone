@@ -23,6 +23,7 @@
 import argparse
 import asyncio
 import sys
+import signal
 import time
 
 # Windows 控制台默认 GBK，遇到无法编码的字符会直接崩溃。先放宽错误处理。
@@ -54,6 +55,20 @@ MAX_THRUST = 0.25       # 安全上限，只比悬停高 50%，防止一冲就�
 
 # 控高时优先用 TFmini 激光（离地高度）；命令行 --no-laser 可强制回退气压计
 LASER_ENABLE = True
+
+# ---- Ctrl+C 处理 ----
+# 不能让它抛 KeyboardInterrupt：那样 asyncio.run 会立刻销毁 gRPC 通道，
+# finally 里的 land() 根本发不出去（实测报 Connection refused）。
+# 改成"置标志位 -> 主循环正常退出 -> 通道还在 -> 降落能发"。
+STOP = False
+
+
+def _on_sigint(signum, frame):
+    global STOP
+    if STOP:  # 第二次 Ctrl+C 才强制中断
+        raise KeyboardInterrupt
+    STOP = True
+    print("\n[!] 收到 Ctrl+C：正在走安全降落流程；再按一次 Ctrl+C 会强制退出", flush=True)
 
 T0 = time.time()
 
@@ -181,6 +196,12 @@ async def watch_rc(drone, st):
 async def main(args) -> int:
     total = 5
 
+    # 用标志位处理 Ctrl+C，保证降落指令能真正发出去（见文件顶部说明）
+    try:
+        signal.signal(signal.SIGINT, _on_sigint)
+    except Exception:
+        pass
+
     log("======== 配置 ========")
     log(f"  端口       {args.port}")
     log(f"  目标高度   {args.alt:.1f} m")
@@ -292,7 +313,7 @@ async def main(args) -> int:
         target = args.alt
         climb_end = time.time() + 30
         sat_since, alt_at_sat = None, 0.0
-        while time.time() < climb_end and not st["handed_over"]:
+        while time.time() < climb_end and not st["handed_over"] and not STOP:
             err = target - st["alt"]
             thrust = max(MIN_THRUST, min(MAX_THRUST, args.hover_thrust + args.kp * err))
             await drone.offboard.set_attitude(Attitude(0.0, 0.0, 0.0, thrust))
@@ -323,7 +344,7 @@ async def main(args) -> int:
         log("-------- 悬停中（Ctrl+C 退出 / 打杆或拨开关可抢权）--------")
         hold_end = time.time() + args.hold if args.hold > 0 else float("inf")
         last_print = 0.0
-        while time.time() < hold_end and not st["handed_over"]:
+        while time.time() < hold_end and not st["handed_over"] and not STOP:
             err = target - st["alt"]
             thrust = max(MIN_THRUST, min(MAX_THRUST, args.hover_thrust + args.kp * err))
             await drone.offboard.set_attitude(Attitude(0.0, 0.0, 0.0, thrust))
@@ -338,6 +359,8 @@ async def main(args) -> int:
 
         # ---- 收尾 ----
         log("")
+        if STOP:
+            log("收到 Ctrl+C：跳过剩余悬停，直接缓降")
         log("-------- 缓降 --------")
         for _ in range(120):  # 最长 12 秒
             if st["handed_over"] or st["alt"] <= 0.15:
@@ -352,9 +375,9 @@ async def main(args) -> int:
 
     finally:
         st["expect_offboard"] = False
-        for t in tasks:
-            t.cancel()
 
+        # 顺序很重要：先降落并等上锁，再取消遥测任务。
+        # 任务一取消，st["armed"] 就不再更新，也就没法确认到底上锁没有。
         try:
             await asyncio.wait_for(drone.offboard.stop(), 3)
         except Exception:
@@ -364,13 +387,22 @@ async def main(args) -> int:
             log("收尾：降落 + 上锁")
             try:
                 await asyncio.wait_for(drone.action.land(), 10)
-                log("       [OK] 已发送降落")
+                log("       [OK] 降落指令已送达")
             except Exception as e:
-                log(f"       降落未确认: {e}")
-            try:
-                await asyncio.wait_for(drone.action.disarm(), 5)
-            except Exception:
-                pass
+                log(f"       降落指令发送失败: {e}")
+
+            # PX4 落地后会按 COM_DISARM_LAND 自动上锁，这里等它确认
+            for _ in range(24):  # 最多 12 秒
+                if not st.get("armed"):
+                    break
+                await asyncio.sleep(0.5)
+            if st.get("armed"):
+                log("       [!] 仍未上锁：可能还在下降途中，或传感器认为未落地。请用遥控器确认")
+            else:
+                log("       [OK] 已上锁")
+
+        for t in tasks:
+            t.cancel()
         log("结束")
 
 
