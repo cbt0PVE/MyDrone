@@ -52,6 +52,9 @@ KP_ALT = 0.05           # 高度环增益；推重比越高增益要越小，0.0
 MIN_THRUST = 0.04
 MAX_THRUST = 0.25       # 安全上限，只比悬停高 50%，防止一冲就上天
 
+# 控高时优先用 TFmini 激光（离地高度）；命令行 --no-laser 可强制回退气压计
+LASER_ENABLE = True
+
 T0 = time.time()
 
 
@@ -108,7 +111,56 @@ async def watch_armed(drone, st):
 
 async def watch_altitude(drone, st):
     async for pos in drone.telemetry.position():
-        st["alt"] = pos.relative_altitude_m
+        st["baro"] = pos.relative_altitude_m  # 气压计 / EKF 高度
+
+
+async def compute_height(st):
+    """后台统一决定"当前高度"用哪个源，写回 st["alt"]。
+
+    控制循环只读 st["alt"]，不用关心来源；激光有效就用激光（离地高度），
+    否则回退气压计。日志里再标出来源，方便判断是不是在依赖激光。
+    """
+    while True:
+        if use_laser(st):
+            st["alt"] = st["dist"]
+            st["src"] = "laser"
+        else:
+            st["alt"] = st.get("baro", 0.0)
+            st["src"] = "baro"
+        await asyncio.sleep(0.05)
+
+
+async def watch_distance(drone, st):
+    """TFmini 激光：PX4 以 DISTANCE_SENSOR 发出原始测距值。"""
+    async for d in drone.telemetry.distance_sensor():
+        st["dist"] = d.current_distance_m
+        st["dmin"] = d.minimum_distance_m or 0.0
+        st["dmax"] = d.maximum_distance_m or 0.0
+        st["dist_t"] = time.monotonic()
+
+
+def use_laser(st) -> bool:
+    """激光值是否可以拿来控高。
+
+    四条都满足才算数：有值、1 秒内更新过、在量程内、且高于 0.15m。
+    最后一条是为了排掉"贴地时钳在量程下限 0.10"的假数据。
+    """
+    if not LASER_ENABLE:
+        return False
+    d = st.get("dist")
+    if d is None or time.monotonic() - st.get("dist_t", 0) > 1.0:
+        return False
+    dmin, dmax = st.get("dmin", 0.0), st.get("dmax", 0.0)
+    if dmax > 0 and not (dmin <= d <= dmax):
+        return False
+    return d >= 0.15
+
+
+def height_of(st):
+    """返回 (用于控高的高度, 来源字符串)。激光优先，否则回退气压计。"""
+    if use_laser(st):
+        return st["dist"], "laser"
+    return st.get("alt", 0.0), "baro"
 
 
 async def watch_status(drone, st):
@@ -163,6 +215,8 @@ async def main(args) -> int:
         asyncio.create_task(watch_mode(drone, st)),
         asyncio.create_task(watch_armed(drone, st)),
         asyncio.create_task(watch_altitude(drone, st)),
+        asyncio.create_task(watch_distance(drone, st)),
+        asyncio.create_task(compute_height(st)),
         asyncio.create_task(watch_status(drone, st)),
         asyncio.create_task(watch_rc(drone, st)),
     ]
@@ -242,7 +296,7 @@ async def main(args) -> int:
             err = target - st["alt"]
             thrust = max(MIN_THRUST, min(MAX_THRUST, args.hover_thrust + args.kp * err))
             await drone.offboard.set_attitude(Attitude(0.0, 0.0, 0.0, thrust))
-            log(f"       高度 {st['alt']:5.2f} m | 推力 {thrust * 100:3.0f}% | "
+            log(f"       高度 {st['alt']:5.2f} m({st.get('src', '?')}) | 推力 {thrust * 100:3.0f}% | "
                 f"模式 {getattr(st['mode'], 'name', '?')}")
 
             saturated = thrust >= MAX_THRUST - 0.001
@@ -275,7 +329,7 @@ async def main(args) -> int:
             await drone.offboard.set_attitude(Attitude(0.0, 0.0, 0.0, thrust))
             if time.time() - last_print > 1.0:
                 last_print = time.time()
-                log(f"       高度 {st['alt']:5.2f} m | 推力 {thrust * 100:3.0f}%")
+                log(f"       高度 {st['alt']:5.2f} m({st.get('src', '?')}) | 推力 {thrust * 100:3.0f}%")
             await asyncio.sleep(0.1)
 
         if st["handed_over"]:
@@ -330,7 +384,11 @@ if __name__ == "__main__":
     ap.add_argument("--hover-thrust", type=float, default=HOVER_THRUST, help="悬停基准推力")
     ap.add_argument("--kp", type=float, default=KP_ALT, help="高度环增益")
     ap.add_argument("--no-arm", action="store_true", help="只发流不解锁")
+    ap.add_argument("--no-laser", action="store_true", help="不用 TFmini，强制用气压计控高")
     args = ap.parse_args()
+
+    # --no-laser 时强制回退气压计（模块级作用域，直接赋值即可）
+    LASER_ENABLE = not args.no_laser
 
     try:
         sys.exit(asyncio.run(main(args)))
