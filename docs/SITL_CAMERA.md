@@ -84,6 +84,8 @@ bash sim/run.sh --no-arm            # 只跑视觉，看距离输出
 
 实测（1280×960 抓帧）：
 
+![SITL 里的行人目标](image/sitl_person_frame.png)
+
 | 项 | 值 |
 | --- | --- |
 | YOLOv8n 单类人体权重置信度 | **0.884** |
