@@ -29,8 +29,9 @@
   可一键关/开 WiFi+蓝牙，板子实测 `status` 正常。见 `docs/LOGGING.md`。
 - 2026-11-07 **RKNN 代码路径 + 板上实测**：`RknnDetector` 支持 **3 头输出**
   （DFL softmax + sigmoid + 复用 NMS/测距）；3 头 INT8 模型在板上检出人，
-  **conf 0.831，推理 18.3 FPS，端到端 13.7 FPS**。全模型 INT8 的分类通道会归零，
-  已放弃；FP16 4.8 FPS、ONNX CPU 6.9 FPS 仅作对照。见 `docs/RKNN.md`。
+  **conf 0.831，与 ONNX 框 IoU 0.9916，推理 18.3 FPS，端到端 13.7 FPS**。
+  全模型 INT8 的分类通道会归零，已放弃；FP16 4.8 FPS、ONNX CPU 6.9 FPS 仅作对照。
+  见 `docs/RKNN.md`。
 - 2026-10-31 **SITL 相机视觉闭环打通**（不依赖实体相机）：
   - `vnav/camera.py`：取图源抽象（本地摄像头 / 网络流 / **Gazebo Transport**），
     `VisionWorker` 硬编码的 `cv2.VideoCapture` 已收口
@@ -87,15 +88,16 @@
    RKNN toolkit2 已在 WSL 24.04 跑通（3 头 INT8，18.3 FPS）。
 8. **失控保护参数当前值未知**：`COM_OBL_RC_ACT`、`COM_OF_LOSS_T`、`COM_RC_OVERRIDE`、
    `NAV_RCL_ACT`。上电后用 QGC 读一遍并记录；目标见 `docs/CRASH_AND_FAILSAFE.md`。
-9. **RKNN 与 ONNX 的框 IoU / 分数偏差尚未量化**；13.7 FPS 端到端也还没优化到 30。
+9. **RKNN 与 ONNX 的精度已对照**：同图 top 框 **IoU 0.9916**，score 0.808 vs 0.831。
+   端到端 13.7 FPS，尚未优化到 30。
 
 ## 下一步
 
 0. **上桨前先做失控保护地面验证**（拆桨，红线）：`COM_OBL_RC_ACT=Land`、
    `COM_OF_LOSS_T=1.0`、`COM_RC_OVERRIDE` 覆盖 Offboard；脚本杀掉后 2s 内
    飞控必须退出 Offboard 并进入 Land。见 `docs/CRASH_AND_FAILSAFE.md`。
-1. **香橙派 5 Pro 阶段 1：RKNN**（已打通 3 头 INT8）：18.3 FPS 推理 / 13.7 FPS 端到端。
-   下一步：ONNX↔RKNN 框 IoU/分数对照；后处理优化冲 30 FPS。见 `docs/RKNN.md`。
+1. **香橙派 5 Pro 阶段 1：RKNN**（已打通 3 头 INT8）：精度验收过（IoU 0.9916），
+   推理 18.3 FPS / 端到端 13.7 FPS。下一步：后处理优化冲 30 FPS。见 `docs/RKNN.md`。
 2. **实机调试按 `docs/RC_OFFBOARD_SETUP.md` 走**。红线：清单第 5 项「Offboard 中打杆抢权」不通过就不上桨。
 3. **三类课程场景的 SITL 版本**（不依赖采购，可并行）：静态已有；
    匀速给 actor 加轨迹；部分遮挡加挡板，验证 `target_stale_hold_s` / `_release_s` 分级。

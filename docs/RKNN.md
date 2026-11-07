@@ -137,6 +137,9 @@ unshare -r -m bash -c 'mount --bind ~/.local/lib/rknn/librknnrt.so /usr/lib/libr
 | --- | --- |
 | 输出 | 6 个张量，形状符合预期 |
 | 检出 | **conf 0.831**，框中心 `(292, 355)` |
+| ONNX 同图 top 框 | `[160.5, 117.2, 440.7, 595.0]`，score 0.808 |
+| RKNN 同图 top 框 | `[161.6, 116.9, 440.8, 593.2]`，score 0.831 |
+| 框 IoU（ONNX vs RKNN） | **0.9916** |
 | 单帧推理（NHWC） | 54.5 ms / **18.3 FPS** |
 | 端到端（含 letterbox + DFL + NMS + 测距） | 72.9 ms / **13.7 FPS** |
 | FP16 全模型 | 209 ms / 4.8 FPS（不可用） |
@@ -196,6 +199,6 @@ bash ~/run_with_rknn.sh python3 ~/bench_rknn.py --model ~/best_heads.rknn --form
 - [x] WSL py3.10 + toolkit2 2.3.2 + 依赖修复
 - [x] **3 头 INT8 模型可检出人，conf 0.831**
 - [x] 推理 18.3 FPS，端到端 13.7 FPS
-- [ ] 与 ONNX 的框 IoU / 分数偏差量化对照
+- [x] 与 ONNX 的框 **IoU 0.9916**，score 0.808 vs 0.831
 - [ ] 冲 30 FPS（后处理优化 / C++ / 更小输入）
 - [ ] 相机到货后的实拍验证
