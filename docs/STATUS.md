@@ -57,6 +57,10 @@
 - 2026-11-07 **控制仿真 + PI**：`tools/control_sim.py`。目标 0.5m/s、保持 2.5m：
   P-only 稳态误差 **0.624m**；PI（`ki=0.3`、积分限幅 2.0、关闭接近降速）
   降到 **0.056m**。参数变更与回退见 `docs/TRACKING_ALGO_PLAN.md`。
+- 2026-11-08 **起飞前点选目标**：新增 `tools/enroll_server.py`（本地 MJPEG 网页 +
+  target.json）和 `run_tracking.py --target`（首帧锁定）。板子上页面 200、
+  POST 保存成功；`run_tracking --target --no-arm` 首帧锁 `id=1` 并持续跟踪。
+  见 `docs/BOARD_ENROLL.md`。
 - 2026-10-31 **SITL 相机视觉闭环打通**（不依赖实体相机）：
   - `vnav/camera.py`：取图源抽象（本地摄像头 / 网络流 / **Gazebo Transport**），
     `VisionWorker` 硬编码的 `cv2.VideoCapture` 已收口

@@ -138,6 +138,22 @@ def test_lock_target_by_bbox():
     assert (out.bbox[0] + out.bbox[2]) / 2.0 > 300
 
 
+def test_pending_target_lock():
+    import types
+
+    frames = [[box(100, 100)]]
+    cfg = types.SimpleNamespace(
+        mot_iou_threshold=0.3, mot_max_age=10, mot_min_hits=1,
+        mot_velocity_alpha=0.5, mot_reacquire_px=300, mot_max_lost=10,
+        appearance_enabled=False, appearance_weight=0.5, appearance_min_sim=0.5,
+    )
+    det = TrackingDetector(FakeBase(frames), cfg)
+    det.set_pending_target_norm((100 / 640, 100 / 480, 200 / 640, 300 / 480))
+    out = det.detect(np.zeros((480, 640, 3), np.uint8))
+    assert out is not None
+    assert abs((out.bbox[0] + out.bbox[2]) / 2 - 150) < 2
+
+
 class FakeBase:
     def __init__(self, frames):
         self.frames = frames

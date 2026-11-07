@@ -197,6 +197,7 @@ unshare -r -m bash -c '
 | `tools/eval_rknn_batch.py` | 批量 ONNX↔RKNN 框对照 |
 | `tools/occlusion_bench.py` | 遮挡 N 帧的 ID 保持/重捕获基准 |
 | `tools/control_sim.py` | 二维控制仿真（P vs PI） |
+| `tools/enroll_server.py` | 起飞前手机/PC 网页点选目标，保存 target.json |
 | `tools/run_with_rknn.sh` | 用户态加载 2.3.2 运行时 |
 | `tools/setup_rknn_wsl.sh` | WSL 环境脚本（onnx 1.16.1 / setuptools<81） |
 | `tools/setup_rknn_board.sh` | 板子用户级安装（OpenCV 4.10 固定） |

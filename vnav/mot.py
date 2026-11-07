@@ -50,8 +50,11 @@ def _iou_matrix(tracks, dets):
 def _appearance_matrix(tracks, dets):
     m = np.zeros((len(tracks), len(dets)), dtype=np.float32)
     for i, t in enumerate(tracks):
+        gallery = t.appearance_gallery or ([t.appearance] if t.appearance is not None else [])
         for j, d in enumerate(dets):
-            m[i, j] = similarity(t.appearance, d.appearance)
+            if d.appearance is None or not gallery:
+                continue
+            m[i, j] = max(similarity(g, d.appearance) for g in gallery)
     return m
 
 
@@ -69,7 +72,20 @@ class Track:
     time_since_update: int = 0
     velocity: np.ndarray = field(default_factory=lambda: np.zeros(2, dtype=np.float32))
     state: str = "tentative"  # tentative / confirmed / lost
-    appearance: np.ndarray = None  # 归一化 HSV 直方图
+    appearance: np.ndarray = None  # 最近一次归一化 HSV 直方图
+    appearance_gallery: list = field(default_factory=list)  # 多帧模板，抗姿态/光照
+
+    def add_appearance(self, hist, max_len=5):
+        if hist is None:
+            return
+        self.appearance_gallery.append(hist)
+        if len(self.appearance_gallery) > max_len:
+            self.appearance_gallery = self.appearance_gallery[-max_len:]
+        # 用 gallery 均值作为主模板，同时保留多模板用于 max 相似度
+        mean = np.mean(self.appearance_gallery, axis=0)
+        s = float(mean.sum())
+        if s > 0:
+            self.appearance = mean / s
 
     @property
     def confirmed(self):
@@ -87,6 +103,7 @@ class IouTracker:
         velocity_alpha: float = 0.5,
         appearance_weight: float = 0.5,
         appearance_min_sim: float = 0.5,
+        reacquire_px: float = 200.0,
     ):
         self.iou_threshold = float(iou_threshold)
         self.max_age = int(max_age)
@@ -94,6 +111,7 @@ class IouTracker:
         self.velocity_alpha = float(velocity_alpha)
         self.appearance_weight = float(appearance_weight)
         self.appearance_min_sim = float(appearance_min_sim)
+        self.reacquire_px = float(reacquire_px)
         self.tracks = []
         self._next_id = 1
 
@@ -326,8 +344,29 @@ class TrackingDetector:
         )
         self.cfg = cfg
         self.use_appearance = bool(getattr(cfg, "appearance_enabled", True))
+        self._pending_target_norm = None
+
+    def set_pending_target_norm(self, bbox_norm):
+        """起飞前点选结果：归一化 bbox，首帧转像素后锁定。"""
+        if bbox_norm is None or len(bbox_norm) != 4:
+            raise ValueError("bbox_norm 必须是 4 个数")
+        vals = tuple(float(v) for v in bbox_norm)
+        if not all(0.0 <= v <= 1.0 for v in vals):
+            raise ValueError("bbox_norm 必须在 0–1")
+        if vals[2] <= vals[0] or vals[3] <= vals[1]:
+            raise ValueError("bbox_norm 的 x2/y2 必须大于 x1/y1")
+        self._pending_target_norm = vals
 
     def detect(self, frame):
+        if self._pending_target_norm is not None and frame is not None:
+            h, w = frame.shape[:2]
+            x1, y1, x2, y2 = self._pending_target_norm
+            bbox = (x1 * w, y1 * h, x2 * w, y2 * h)
+            self._pending_target_norm = None
+            out = self.lock_target(frame, bbox)
+            if out is not None:
+                return out
+
         dets = self.base.detect_all(frame)
         if self.use_appearance and frame is not None:
             for d in dets:

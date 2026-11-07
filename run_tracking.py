@@ -23,9 +23,11 @@
 
 import argparse
 import asyncio
+import json
 import platform
 import sys
 import time
+from pathlib import Path
 
 for _stream in (sys.stdout, sys.stderr):
     try:
@@ -73,6 +75,7 @@ def parse_args():
     ap.add_argument("--log-hz", type=float, default=2.0, help="状态日志频率，默认 2Hz")
     ap.add_argument("--no-log", action="store_true", help="不写日志文件，只在终端打印")
     ap.add_argument("--mot", action="store_true", help="启用多目标跟踪 + 目标锁定（多人/遮挡场景）")
+    ap.add_argument("--target", default=None, help="enroll_server 保存的 target.json；指定后首帧锁定该目标")
     return ap.parse_args()
 
 
@@ -139,11 +142,26 @@ async def _state_loop(fl, state, worker, mission_ref, controller_ref, cfg):
         fl.state(**fields)
 
 
-async def visual_only(cfg, log=log, fl=None):
+def _apply_target(detector, target, log):
+    """把 enroll_server 的 target.json 交给 MOT 检测器，首帧锁定。"""
+    if not target:
+        return
+    data = json.loads(Path(target).expanduser().read_text(encoding="utf-8"))
+    bbox = data.get("bbox_norm")
+    if not bbox or len(bbox) != 4:
+        raise SystemExit(f"target 文件没有合法的 bbox_norm: {target}")
+    if not hasattr(detector, "set_pending_target_norm"):
+        raise SystemExit("--target 需要 --mot，且检测器为 ONNX/RKNN（支持 detect_all）")
+    detector.set_pending_target_norm(bbox)
+    log(f"已加载目标 bbox_norm={[round(float(v), 3) for v in bbox]}，首帧锁定")
+
+
+async def visual_only(cfg, log=log, fl=None, target=None):
     """不连飞控，只跑检测，用来看模型和测距是否正常。"""
     K, dist, note = load_camera_matrix(cfg)
     log(f"相机内参：{note}")
     detector = build_detector(cfg, K, dist)
+    _apply_target(detector, target, log)
     worker = VisionWorker(cfg, detector)
     worker.start()
     log("[OK] 相机已启动。Ctrl+C 结束")
@@ -207,7 +225,7 @@ async def _run_inner(args, log, fl):
     if args.alt:
         cfg.hover_alt_m = args.alt
     cfg.show_window = not args.no_window
-    cfg.use_mot = args.mot
+    cfg.use_mot = args.mot or bool(args.target)
 
     auto_takeoff = args.sitl or args.auto_takeoff
 
@@ -245,12 +263,13 @@ async def _run_inner(args, log, fl):
         log(f"      {fl.jsonl_path}")
 
     if args.no_arm:
-        await visual_only(cfg, log, fl)
+        await visual_only(cfg, log, fl, target=args.target)
         return 0
 
     K, dist, note = load_camera_matrix(cfg)
     log(f"相机内参：{note}")
     detector = build_detector(cfg, K, dist)
+    _apply_target(detector, args.target, log)
     worker = VisionWorker(cfg, detector)
     worker.start()
     log("[OK] 相机已启动")

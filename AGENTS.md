@@ -66,6 +66,7 @@ MyDrone/
 - `docs/LOGGING.md` —— **飞行日志格式与字段**：`[级别][时间](字段)` 文本 + JSONL，含 `flight_mode.sh`
 - `docs/CRASH_AND_FAILSAFE.md` —— **坠机复盘与失控保护**：参数、拆桨验证清单、为什么不用固定配平
 - `docs/BOARD_SSH.md` —— **香橙派 SSH 免密登录与无头使用**（含 WiFi/有线切换）
+- `docs/BOARD_ENROLL.md` —— **起飞前手机/PC 点选目标**：本地网页 + target.json + --target
 - `docs/ORANGEPI_FIRST_BOOT.md` —— **零基础开箱**：写 SD 卡 → 开机 → 联网 → SSH
 - `docs/ORANGEPI_BRINGUP.md` —— **香橙派上板分阶段验收**：NPU / RKNN / 串口 / 相机
 - `docs/ORANGEPI_BUILD_LOG.md` —— **开箱 → SSH → RKNN 的完整步骤/版本/失败记录**（事后补的流水账）
