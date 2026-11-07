@@ -52,6 +52,7 @@ class Detection:
     down_m: float  # 标记在机体下向上的分量（也是相机到标签的直线距离）
     yaw_deg: float  # 标签相对相机的偏航角，用于对齐机头（可选）
     tvec: np.ndarray  # 原始平移向量，调试用
+    confidence: float = -1.0  # 检测置信度；ArUco 固定给 1.0，YOLO 给分类分数
 
 
 # ====================================================================
@@ -155,6 +156,7 @@ class ArucoTracker:
             down_m=float(down),
             yaw_deg=float(yaw),
             tvec=tvec,
+            confidence=1.0,
         )
 
     @staticmethod

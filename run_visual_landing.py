@@ -114,7 +114,7 @@ async def run(args):
 
         # ---------- 5. 进入 Offboard ----------
         controller = OffboardController(drone, cfg, log=log)
-        await controller.start()
+        await controller.start(state.yaw_deg)
         await asyncio.sleep(0.5)
 
         if not state.offboard:

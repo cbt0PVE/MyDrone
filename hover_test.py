@@ -129,6 +129,14 @@ async def watch_altitude(drone, st):
         st["baro"] = pos.relative_altitude_m  # 气压计 / EKF 高度
 
 
+async def watch_attitude(drone, st):
+    """记录当前姿态。yaw 用于 Offboard 接管时保持机头方向。"""
+    async for e in drone.telemetry.attitude_euler():
+        st["roll"] = e.roll_deg
+        st["pitch"] = e.pitch_deg
+        st["yaw"] = e.yaw_deg
+
+
 async def compute_height(st):
     """后台统一决定"当前高度"用哪个源，写回 st["alt"]。
 
@@ -178,6 +186,11 @@ def height_of(st):
     return st.get("alt", 0.0), "baro"
 
 
+def yaw_of(st) -> float:
+    """当前机头朝向。Offboard 的 yaw 必须跟它走，不能写死 0（正北）。"""
+    return float(st.get("yaw", 0.0))
+
+
 async def watch_status(drone, st):
     async for msg in drone.telemetry.status_text():
         log(f"[飞控] {msg.text}")
@@ -185,9 +198,11 @@ async def watch_status(drone, st):
 
 async def watch_rc(drone, st):
     async for rc in drone.telemetry.rc_status():
-        if rc.available != st.get("rc"):
-            st["rc"] = rc.available
-            log("RC 链路有信号" if rc.available else "! RC 链路已断开")
+        # MAVSDK 3.15 的字段是 is_available（不是 available）
+        avail = getattr(rc, "is_available", getattr(rc, "available", False))
+        if avail != st.get("rc"):
+            st["rc"] = avail
+            log("RC 链路有信号" if avail else "! RC 链路已断开")
 
 
 # ---------------------------------------------------------------- 主流程
@@ -230,12 +245,14 @@ async def main(args) -> int:
     log("       [OK] 通信建立")
 
     st = {"armed": False, "mode": None, "alt": 0.0, "rc": None,
+          "yaw": 0.0,
           "expect_offboard": False, "handed_over": False}
 
     tasks = [
         asyncio.create_task(watch_mode(drone, st)),
         asyncio.create_task(watch_armed(drone, st)),
         asyncio.create_task(watch_altitude(drone, st)),
+        asyncio.create_task(watch_attitude(drone, st)),
         asyncio.create_task(watch_distance(drone, st)),
         asyncio.create_task(compute_height(st)),
         asyncio.create_task(watch_status(drone, st)),
@@ -263,7 +280,7 @@ async def main(args) -> int:
         stage(3, total, "预发 setpoint 并切 OFFBOARD",
               "PX4 要求切模式前已有数据流，所以先发 1.5 秒")
         for i in range(15):
-            await drone.offboard.set_attitude(Attitude(0.0, 0.0, 0.0, 0.0))
+            await drone.offboard.set_attitude(Attitude(0.0, 0.0, yaw_of(st), 0.0))
             await asyncio.sleep(0.1)
             if i in (4, 9, 14):
                 log(f"       已发送 {i + 1}/15")
@@ -285,7 +302,7 @@ async def main(args) -> int:
             log("电机不转。现在去拨遥控器开关 B，观察上面『模式变更』。")
             log("Ctrl+C 结束。")
             while not st["handed_over"]:
-                await drone.offboard.set_attitude(Attitude(0.0, 0.0, 0.0, 0.0))
+                await drone.offboard.set_attitude(Attitude(0.0, 0.0, yaw_of(st), 0.0))
                 await asyncio.sleep(0.1)
             log("[OK] 遥控器接管成功 —— 开关绑定是对的")
             return 0
@@ -316,7 +333,7 @@ async def main(args) -> int:
         while time.time() < climb_end and not st["handed_over"] and not STOP:
             err = target - st["alt"]
             thrust = max(MIN_THRUST, min(MAX_THRUST, args.hover_thrust + args.kp * err))
-            await drone.offboard.set_attitude(Attitude(0.0, 0.0, 0.0, thrust))
+            await drone.offboard.set_attitude(Attitude(0.0, 0.0, yaw_of(st), thrust))
             log(f"       高度 {st['alt']:5.2f} m({st.get('src', '?')}) | 推力 {thrust * 100:3.0f}% | "
                 f"模式 {getattr(st['mode'], 'name', '?')}")
 
@@ -347,7 +364,7 @@ async def main(args) -> int:
         while time.time() < hold_end and not st["handed_over"] and not STOP:
             err = target - st["alt"]
             thrust = max(MIN_THRUST, min(MAX_THRUST, args.hover_thrust + args.kp * err))
-            await drone.offboard.set_attitude(Attitude(0.0, 0.0, 0.0, thrust))
+            await drone.offboard.set_attitude(Attitude(0.0, 0.0, yaw_of(st), thrust))
             if time.time() - last_print > 1.0:
                 last_print = time.time()
                 log(f"       高度 {st['alt']:5.2f} m({st.get('src', '?')}) | 推力 {thrust * 100:3.0f}%")
@@ -365,7 +382,7 @@ async def main(args) -> int:
         for _ in range(120):  # 最长 12 秒
             if st["handed_over"] or st["alt"] <= 0.15:
                 break
-            await drone.offboard.set_attitude(Attitude(0.0, 0.0, 0.0, MIN_THRUST))
+            await drone.offboard.set_attitude(Attitude(0.0, 0.0, yaw_of(st), MIN_THRUST))
             await asyncio.sleep(0.1)
         return 0
 

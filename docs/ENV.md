@@ -18,6 +18,32 @@
 
 **注意**：不要用 base 环境（Python 3.13 + mavsdk 3.17.4，那个包已更名 `mavsdk-grpc`，会告警且 API 不兼容）。
 
+## C. 香橙派 5 Pro · 机载电脑（2026-11-07 首次开机）
+
+| 项 | 值 |
+| --- | --- |
+| 型号 | Orange Pi 5 Pro（RK3588S，16GB） |
+| 系统 | Orange Pi 1.0.6 Jammy（Ubuntu 22.04） |
+| 内核 | 5.10.160-rockchip-rk3588 |
+| NPU | RKNPU 驱动 v0.9.6（`/sys/kernel/debug/rknpu/version`） |
+| 网络 | 有线 `enP4p65s0` `192.168.100.147`（MAC `c0:74:2b:f8:cf:6f`）；WiFi `wlan0` `192.168.100.151`（MAC `8c:cd:fe:10:a0:34`，SSID `helta的新路由`）；两条都在线，有线优先 |
+| 账号 | `orangepi`（默认密码，**建议改**；改后 `sudo` 用新密码） |
+| SSH | Windows 上 `ssh orangepi`，密钥免密（`~/.ssh/orangepi5pro_ed25519`） |
+| 状态 | 空载 42–43°C；根分区 28G（剩 22G）；内存 15Gi 可用 |
+| 镜像 | `Orangepi5pro_1.0.6_ubuntu_jammy_desktop_xfce_linux5.10.160.img`（SHA256 `bcd25a16…c5a92`） |
+
+> 板子现在可以完全脱离显示器：Windows 上双击桌面的 `连接香橙派.bat`，
+> 或 PowerShell 里 `ssh orangepi` 即可。详细用法见 `docs/BOARD_SSH.md`。
+>
+> 2026-11-07：WiFi 已配好并设为开机自动连接。不插网线用 `ssh orangepi`（指向 WiFi
+> `192.168.100.151`）；插着网线也可以用 `ssh orangepi-lan`（有线 `192.168.100.147`）。
+> 注意：板子连的是 2.4GHz WiFi，飞行时可能干扰 2.4GHz 遥控，装机飞行前要改用 5GHz
+> 或关掉 WiFi——机载视觉与飞控之间走的是 UART，不依赖 WiFi。
+>
+> 2026-11-07：`/etc/update-manager/release-upgrades` 的 `Prompt` 由 `lts` 改为 `never`。
+> 依据：Orange Pi 1.0.6 是 22.04 BSP，内核 5.10 + RKNPU 0.9.6 + 摄像头/VPU 库配套，
+> 禁止误升 24.04。回退：把 `Prompt` 改回 `lts`。
+
 ## B. macOS 笔记本 · 写文档 / 改代码
 
 **本机定位：主要是改代码、写 `docs/` 与 `devlogs/` 的 Markdown。仿真环境不是当前需求，下面 SITL / jMAVSim 相关只作存档，别为它专门折腾。** 状态：已采集（2026-10-25，Mac 本机实测）。需要重查时跑：

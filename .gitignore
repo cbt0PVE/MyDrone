@@ -65,3 +65,5 @@ sim/assets/
 datasets/
 data/
 runs/
+# 飞行日志：每次飞行都生成，别进库
+logs/

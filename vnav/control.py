@@ -25,16 +25,22 @@ class OffboardController:
         self.started = False
         self.last_cmd = (0.0, 0.0, 0.0)
 
-    async def start(self):
+    async def start(self, yaw_deg=0.0):
         """预热 setpoint 流，再切模式。
 
         为什么要预热：PX4 只有在收到 Offboard setpoint 之后才允许切入
         OFFBOARD。顺序反了会被直接拒绝（COMMAND_DENIED）。
+
+        yaw 必须传**当前机头朝向**：以前这里写死 0（正北），切 Offboard
+        的瞬间飞机会被拽向固定方向，表现为"起飞时机头偏/自转"。
+        0.0 只是给老调用方的兼容默认值。
         """
         period = 1.0 / self.cfg.control_hz
-        self.log("预热 setpoint 流 ...")
+        self.log(f"预热 setpoint 流（yaw={yaw_deg:.1f}°）...")
         for _ in range(int(self.cfg.control_hz)):  # 约 1 秒
-            await self.drone.offboard.set_velocity_ned(VelocityNedYaw(0, 0, 0, 0))
+            await self.drone.offboard.set_velocity_ned(
+                VelocityNedYaw(0, 0, 0, yaw_deg)
+            )
             await asyncio.sleep(period)
 
         self.log("请求切入 OFFBOARD ...")

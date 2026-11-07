@@ -51,6 +51,11 @@ class Config:
     # 同一个模型的 ONNX 版本。后缀是 .onnx 时走 onnxruntime，不需要 torch。
     # SITL（WSL）默认用它；上香橙派也是这条路（ONNX -> RKNN）。
     yolo_weights_onnx: str = "runs/detect/runs/detect/coco_person/weights/best.onnx"
+    # RKNN：板上只装 rknn-toolkit-lite2 做推理；转换在 x86_64 Linux/WSL 上做。
+    # 后缀是 .rknn 或 detector="rknn" 时走 RknnDetector。
+    rknn_model_path: str = "runs/detect/runs/detect/coco_person/weights/best.rknn"
+    rknn_core_mask: str = "NPU_CORE_0_1_2"  # 3 核 NPU 全开；单核可改 NPU_CORE_0
+    rknn_input_size: int = 640
     yolo_conf: float = 0.35
     target_class: int = 0  # 单类模型里 person 就是 0
     # 相机安装方向：forward = 朝前（追人用），down = 朝下（降落用）

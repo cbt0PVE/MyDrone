@@ -18,7 +18,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from vnav.config import Config, load_camera_matrix  # noqa: E402
-from vnav.detectors import estimate_from_bbox  # noqa: E402
+from vnav.detectors import RknnDetector, build_detector, estimate_from_bbox  # noqa: E402
 from vnav.vision import (  # noqa: E402
     ArucoTracker,
     PID,
@@ -150,6 +150,22 @@ def test_aruco_detect_synthetic():
     assert abs(det.forward_m) < 1e-3
     assert abs(det.right_m) < 1e-3
     assert det.down_m > 0.05, "距离应为正值（标签在相机前方）"
+
+
+def test_rknn_detector_selection():
+    """--weights xxx.rknn 或 detector="rknn" 时必须走 RknnDetector，且不提前加载运行时。"""
+    cfg = Config()
+    cfg.yolo_weights = "dummy.rknn"
+    det = build_detector(cfg, np.eye(3), np.zeros(5))
+    assert isinstance(det, RknnDetector)
+    assert det.model_path == "dummy.rknn"
+    assert det._runtime is None  # 懒加载：没板子也能构造
+
+    cfg2 = Config()
+    cfg2.detector = "rknn"
+    det2 = build_detector(cfg2, np.eye(3), np.zeros(5))
+    assert isinstance(det2, RknnDetector)
+    assert det2.model_path == cfg2.rknn_model_path
 
 
 if __name__ == "__main__":

@@ -27,7 +27,7 @@ class Phase(Enum):
 
 
 class TrackingMission:
-    def __init__(self, state, vision, controller, cfg, safety, bench=False, log=print):
+    def __init__(self, state, vision, controller, cfg, safety, bench=False, log=print, event=None):
         self.state = state
         self.vision = vision
         self.controller = controller
@@ -35,9 +35,11 @@ class TrackingMission:
         self.safety = safety
         self.bench = bench
         self.log = log
+        self.event = event
         self.phase = Phase.SEARCH
         self._last_log = 0.0
         self._last_id = None
+        self._last_action = None
 
     async def run(self):
         cfg = self.cfg
@@ -52,19 +54,25 @@ class TrackingMission:
                 action, reason = self.safety.evaluate(self.state, det, age)
                 if action is Action.RELEASE:
                     self.log(f"!! 交还控制权：{reason}")
+                    self._event("safety_release", level="WARN", reason=reason)
                     await self.controller.release()
                     self.phase = Phase.RELEASED
                     return
                 if action is Action.ABORT:
                     self.log(f"!! 中止：{reason}")
+                    self._event("safety_abort", level="ERROR", reason=reason)
                     await self.controller.land()
                     self.phase = Phase.DONE
                     return
                 if action is Action.HOLD:
+                    if self._last_action is not Action.HOLD:
+                        self._event("safety_hold", level="WARN", reason=reason)
                     await self.controller.hold(self.state.yaw_deg)
                     self._log_throttled(f"暂时丢目标（{reason}），原地悬停")
+                    self._last_action = action
                     await asyncio.sleep(max(0.0, dt - (time.monotonic() - loop_start)))
                     continue
+                self._last_action = action
 
                 # ---- 2. 算速度 ----
                 v_fwd, v_right, v_down = self._command(det)
@@ -124,7 +132,17 @@ class TrackingMission:
 
     def _enter(self, phase):
         self.log(f"状态 {self.phase.value} -> {phase.value}")
+        self._event("phase_change", old=self.phase.name, new=phase.name)
         self.phase = phase
+
+    def _event(self, name, level="INFO", **fields):
+        """给 FlightLogger 的结构化事件；没接日志器时就静默。"""
+        if self.event is None:
+            return
+        try:
+            self.event(name, level=level, **fields)
+        except Exception:
+            pass
 
     # ------------------------------------------------------------
 

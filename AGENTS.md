@@ -63,6 +63,12 @@ MyDrone/
 ## 文档索引
 
 - `docs/STATUS.md` —— **当前进度与下一步（收工必更新）**
+- `docs/LOGGING.md` —— **飞行日志格式与字段**：`[级别][时间](字段)` 文本 + JSONL，含 `flight_mode.sh`
+- `docs/CRASH_AND_FAILSAFE.md` —— **坠机复盘与失控保护**：参数、拆桨验证清单、为什么不用固定配平
+- `docs/BOARD_SSH.md` —— **香橙派 SSH 免密登录与无头使用**（含 WiFi/有线切换）
+- `docs/ORANGEPI_FIRST_BOOT.md` —— **零基础开箱**：写 SD 卡 → 开机 → 联网 → SSH
+- `docs/ORANGEPI_BRINGUP.md` —— **香橙派上板分阶段验收**：NPU / RKNN / 串口 / 相机
+- `docs/RKNN.md` —— **ONNX → RKNN → 板上推理**：版本配对、转换、基准、排错
 - `docs/SITL_CAMERA.md` —— **SITL 相机视觉闭环**：怎么起、仿真内参怎么算、踩过的坑
 - `docs/AI_CONTEXT.md` —— 自包含的交接上下文，新对话直接整段粘贴
 - `docs/GIT_CHEATSHEET.md` —— 拉取/提交/推送与常见报错处理

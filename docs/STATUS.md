@@ -3,7 +3,7 @@
 > **每次收工前更新这里。** 这是跨机器唯一的"记忆"，不写就等于丢。
 > 格式：写结论，不写过程流水账。
 
-最后更新：2026-10-31 · Windows（SITL 相机闭环打通）
+最后更新：2026-11-07 · Windows（香橙派 5 Pro 开机 + SSH 免密打通，见 `docs/BOARD_SSH.md`）
 
 ## 阶段
 
@@ -14,13 +14,22 @@
 - **第 3 周已完成**：YOLOv8n 训练 mAP@0.5 = 0.7526。
 - **第 2 项下一步（SITL 相机闭环）已完成**：Gazebo 相机 → YOLO → 测距 → 速度闭环，
   收敛到 2.5m 并稳定，见 `docs/SITL_CAMERA.md`。
-- **缺口**：相机与机载电脑未采购；**相机未标定**（`calib.json` 不存在）。
+- **缺口**：机载电脑（香橙派 5 Pro）**已开机并验证**（Ubuntu 22.04 / NPU v0.9.6 / 16GB，SSH 免密可用）；相机仍未采购；**相机未标定**（`calib.json` 不存在）。
 
 ## 已完成
 
 - 通读早期三个脚本，结论见 `docs/CODE_NOTES.md`。
 - 2026-10-27 实测 WSL 仿真链路：PX4 SITL（`gz_x500`）启动成功，MAVSDK `udp://:14540` 1.1 秒连上，见 `docs/SITL_GUIDE.md`。
 - 2026-10-27 **第 3 周训练完成**：YOLOv8n 单类 person，mAP@0.5 = **0.7526**，mAP@0.5:0.95 = 0.4983；4060 上 66.3 FPS（PyTorch）/ 45.7 FPS（ONNX-CPU）。产物与图表见 `docs/WEEK3_RESULTS.md`。
+- 2026-11-07 **香橙派 5 Pro 首次开机成功**：Ubuntu 22.04 / 内核 5.10.160 / RKNPU v0.9.6 / 16GB；
+  空载 42–43°C；已配 Windows 免密 SSH（`ssh orangepi`），可脱离显示器，见 `docs/BOARD_SSH.md`。
+- 2026-11-07 **飞行日志 + 飞行模式脚本**：`vnav/flightlog.py`（文本
+  `[级别][时间](字段=值)` + JSONL 双写，2Hz 状态、事件立即写）；`run_tracking.py` 已接入
+  （配置快照、自检、解锁、Offboard、任务阶段、异常、退出）；`tools/flight_mode.sh`
+  可一键关/开 WiFi+蓝牙，板子实测 `status` 正常。见 `docs/LOGGING.md`。
+- 2026-11-07 **RKNN 代码路径**（未上板验证）：`vnav/detectors.py` 新增 `RknnDetector`
+  （复用 ONNX 的 letterbox/decode/NMS）；`tools/convert_rknn.py`、`make_rknn_dataset.py`、
+  `bench_rknn.py` 已写好；版本选 2.3.2 配驱动 0.9.6。见 `docs/RKNN.md`。
 - 2026-10-31 **SITL 相机视觉闭环打通**（不依赖实体相机）：
   - `vnav/camera.py`：取图源抽象（本地摄像头 / 网络流 / **Gazebo Transport**），
     `VisionWorker` 硬编码的 `cv2.VideoCapture` 已收口
@@ -53,7 +62,14 @@
 
 ## 正在做
 
-- 无。SITL 相机闭环已收尾，下一步见下。
+- 2026-11-07 **坠机复盘**：上次是地面站数传延迟 + Ctrl+C 后降落指令没送达飞控；
+  **不先解决失控保护不上桨**。参数与拆桨验证清单见 `docs/CRASH_AND_FAILSAFE.md`。
+- 2026-11-07 起：**香橙派 5 Pro 上板 bring-up**。阶段 0（开机、NPU、温度、SSH）已完成，
+  正在做阶段 1（RKNN）：WSL 装 py3.10 + rknn-toolkit2 2.3.2，板上装 lite2，转 `best.rknn`。
+  网络较慢，装完即固定。
+  - 系统镜像 `Orangepi5pro_1.0.6_ubuntu_jammy_desktop_xfce_linux5.10.160.img`
+    （8.25GB，SHA256 `bcd25a16…c5a92`）已写卡并通过回读校验。
+  - 首次开机成功；Windows 上 `ssh orangepi` 免密可用（IP 见 `docs/ENV.md` C 节）。
 
 ## 待确认（别当结论用）
 
@@ -64,21 +80,28 @@
    **注意**：SITL 里不适用——仿真的内参由 hfov 精确算出（`fx=270` @640），
    这是仿真唯一的"作弊"，不能当成实机精度。
 5. ArUco 标签实际边长、安装朝向（画面顶部是否对机头）尚未实测确认。
-6. **摄像头与机载电脑均未采购**——视觉只能用笔记本摄像头、手机 IP Webcam
-   或 SITL 仿真验证，装机自主降落要等硬件。
+6. **摄像头仍未采购**——视觉只能用笔记本摄像头、手机 IP Webcam、SITL 仿真
+   或先用 USB UVC 摄像头验证；装机自主降落要等相机。
+7. 香橙派上 **MAVSDK aarch64 wheel 是否可用**、**RKNN toolkit2 在 WSL 24.04 能否安装**、
+   **5 Pro 排针 UART 定义**——三项均为待验证，见 `docs/ORANGEPI_BRINGUP.md` 风险表。
+8. **失控保护参数当前值未知**：`COM_OBL_RC_ACT`、`COM_OF_LOSS_T`、`COM_RC_OVERRIDE`、
+   `NAV_RCL_ACT`。上电后用 QGC 读一遍并记录；目标见 `docs/CRASH_AND_FAILSAFE.md`。
 
 ## 下一步
 
-0. **实机调试按 `docs/RC_OFFBOARD_SETUP.md` 走**。红线：清单第 5 项「Offboard 中打杆抢权」不通过就不上桨。
-1. **三类课程场景的 SITL 版本**（优先级最高，纯仿真、零风险、直接产出验收素材）：
-   - 静态：已有（`mydrone_track.sdf` 里人摆 6m 处）
-   - 匀速：给 actor 加 `<script><trajectory>` 让人沿 x 走，或运行时用 `gz service set_pose` 推
-   - 部分遮挡：加一块移动挡板，验证 `target_stale_hold_s` / `_release_s` 分级
-2. **用 `gz_x500_lidar_down`（airframe 4016）复核高度闭环**——现在用的是 baro，
+0. **上桨前先做失控保护地面验证**（拆桨，红线）：`COM_OBL_RC_ACT=Land`、
+   `COM_OF_LOSS_T=1.0`、`COM_RC_OVERRIDE` 覆盖 Offboard；脚本杀掉后 2s 内
+   飞控必须退出 Offboard 并进入 Land。见 `docs/CRASH_AND_FAILSAFE.md`。
+1. **香橙派 5 Pro 阶段 1：RKNN**（板子已开机，NPU 驱动 v0.9.6）：在 x86 上把 `best.onnx`
+   转成 `best.rknn`，板上装 `rknn-toolkit-lite2` 跑推理；验收 ≥30 FPS 且与 ONNX 框一致。
+   见 `docs/ORANGEPI_BRINGUP.md`。
+2. **实机调试按 `docs/RC_OFFBOARD_SETUP.md` 走**。红线：清单第 5 项「Offboard 中打杆抢权」不通过就不上桨。
+3. **三类课程场景的 SITL 版本**（不依赖采购，可并行）：静态已有；
+   匀速给 actor 加轨迹；部分遮挡加挡板，验证 `target_stale_hold_s` / `_release_s` 分级。
+4. **用 `gz_x500_lidar_down`（airframe 4016）复核高度闭环**——现在用的是 baro，
    真值比读数低约 0.12m；仿真里验高度最好用激光。
-3. 相机到货后：张正友标定 → `calib.json` → 复测距离精度（**这一步才动实机**）。
-4. 采购 USB 广角摄像头（几十块，UVC 免驱）→ 机载手持验证。
-5. 香橙派到货后：`rknn-toolkit2` 转 INT8（需 100–200 张真实场景校准图），上板测 FPS。
+5. 相机到货后：张正友标定 → `calib.json` → 复测距离精度（**这一步才动实机**）。
+6. 采购 USB 广角摄像头（几十块，UVC 免驱）→ 机载手持验证。
 
 ## 环境提醒
 

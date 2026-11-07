@@ -57,7 +57,18 @@ class TelemetryState:
         self.armed = False
         self.alt_m = 0.0
         self.yaw_deg = 0.0
+        # 姿态/速度/位置：日志要用；控制逻辑目前只用 yaw 和高度，不影响原有行为。
+        self.roll_deg = 0.0
+        self.pitch_deg = 0.0
+        self.vel_n_mps = 0.0
+        self.vel_e_mps = 0.0
+        self.vel_d_mps = 0.0
+        self.lat_deg = None
+        self.lon_deg = None
+        self.abs_alt_m = None
+        self.satellites = None
         self.rc_available = False
+        self.rc_rssi = None
         self.battery_pct = 1.0
         self.last_update = 0.0  # 最近一次收到任何遥测的 time.monotonic()
         # 激光测距（TFmini-S）：PX4 把它作为 DISTANCE_SENSOR 发出来
@@ -76,6 +87,8 @@ class TelemetryState:
             asyncio.create_task(self._watch_armed(drone)),
             asyncio.create_task(self._watch_position(drone)),
             asyncio.create_task(self._watch_attitude(drone)),
+            asyncio.create_task(self._watch_velocity(drone)),
+            asyncio.create_task(self._watch_gps(drone)),
             asyncio.create_task(self._watch_rc(drone)),
             asyncio.create_task(self._watch_battery(drone)),
             asyncio.create_task(self._watch_distance(drone)),
@@ -160,16 +173,37 @@ class TelemetryState:
     async def _watch_position(self, drone):
         async for pos in drone.telemetry.position():
             self.alt_m = pos.relative_altitude_m
+            self.lat_deg = pos.latitude_deg
+            self.lon_deg = pos.longitude_deg
+            self.abs_alt_m = pos.absolute_altitude_m
             self.last_update = time.monotonic()
 
     async def _watch_attitude(self, drone):
         async for euler in drone.telemetry.attitude_euler():
+            self.roll_deg = euler.roll_deg
+            self.pitch_deg = euler.pitch_deg
             self.yaw_deg = euler.yaw_deg
+            self.last_update = time.monotonic()
+
+    async def _watch_velocity(self, drone):
+        async for v in drone.telemetry.velocity_ned():
+            self.vel_n_mps = v.north_m_s
+            self.vel_e_mps = v.east_m_s
+            self.vel_d_mps = v.down_m_s
+            self.last_update = time.monotonic()
+
+    async def _watch_gps(self, drone):
+        async for g in drone.telemetry.gps_info():
+            self.satellites = g.num_satellites
             self.last_update = time.monotonic()
 
     async def _watch_rc(self, drone):
         async for rc in drone.telemetry.rc_status():
-            self.rc_available = rc.available
+            # MAVSDK 3.15 的字段是 is_available（不是 available）；
+            # 老版本/其他绑定可能叫 available，这里兼容两者。
+            self.rc_available = getattr(rc, "is_available", getattr(rc, "available", False))
+            # 有的固件/MAVSDK 版本没有这个字段，拿不到就当 None。
+            self.rc_rssi = getattr(rc, "signal_strength_percent", None)
             self.last_update = time.monotonic()
 
     async def _watch_battery(self, drone):

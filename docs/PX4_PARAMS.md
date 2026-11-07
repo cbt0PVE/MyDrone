@@ -11,9 +11,10 @@
 | `RC_STICK_DZ` | 0.10–0.15 | 摇杆零点死区，滤 PPM 抖动 | ⚠️ 默认可能已是 0.1，收益待验证 |
 | `COM_RC_IN_MODE` | 0（RC 输入启用） | 之前"禁用遥控器"很可能就是改了这个 | ⏳ 上电核对现值 |
 | `COM_OF_LOSS_T` | 1.0 s（默认） | Offboard 数据流丢失多久触发保护 | 建议确认 |
-| `COM_OBL_RC_ACT` | 按需（如 0 = Position） | Offboard 中 RC 丢失时的动作 | 建议确认 |
+| `COM_OBL_ACT` | **Land** | Offboard 数据流丢失后的动作 | ⚠️ 2026-11 坠机后改为 Land，见 `docs/CRASH_AND_FAILSAFE.md` |
+| `COM_OBL_RC_ACT` | **Land** | Offboard 中 RC 丢失时的动作 | 与上一条是两个触发源，QGC 搜 `OBL` 都设 Land |
 | `COM_RC_LOSS_T` | 0.5 s（默认） | RC 信号丢失判定时间 | 建议确认 |
-| `NAV_RCL_ACT` | 按需（如 1 = Hold / 2 = Return） | RC 丢失后的失效保护动作 | 室内建议 Hold/Land，别 Return |
+| `NAV_RCL_ACT` | **Land**（室内） | RC 丢失后的失效保护动作 | 室内别设 Return |
 | `COM_DISARM_PRFLT` | 默认 10 s | 地面未解锁自动上锁超时，调试时别调太小 | 注意 |
 
 ### 关于 `COM_RC_OVERRIDE`（重要，别想当然）

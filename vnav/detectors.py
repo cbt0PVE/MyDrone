@@ -132,6 +132,7 @@ class YoloDetector:
             down_m=down,
             yaw_deg=0.0,
             tvec=np.array([right, down, forward], dtype=float),
+            confidence=float(boxes.conf[idx].item()) if boxes.conf is not None else -1.0,
         )
 
 
@@ -234,14 +235,18 @@ class OnnxDetector:
 
     # ---------------- 主流程 ----------------
 
+    def _infer(self, blob):
+        """推理后端：ONNX 用 onnxruntime；子类可以换成 RKNN。"""
+        sess = self._load()
+        return sess.run(None, {self._input_name: blob})
+
     def detect(self, frame):
         if frame is None:
             return None
         import cv2
 
-        sess = self._load()
         blob, scale, pad_x, pad_y = self._letterbox(frame, self._input_hw)
-        outputs = sess.run(None, {self._input_name: blob})
+        outputs = self._infer(blob)
 
         # 单类 person 模型：nc = 1
         num_classes = max(1, int(outputs[0].shape[1]) - 4) if outputs[0].ndim == 3 else 1
@@ -285,7 +290,58 @@ class OnnxDetector:
             down_m=down,
             yaw_deg=0.0,
             tvec=np.array([right, down, forward], dtype=float),
+            confidence=float(scores[pick]),
         )
+
+
+class RknnDetector(OnnxDetector):
+    """RKNN 推理（香橙派 5 Pro）。复用 OnnxDetector 的 letterbox/decode/NMS。
+
+    和 ONNX 的区别只有推理后端：
+        OnnxDetector  -> onnxruntime sess.run()
+        RknnDetector  -> rknnlite RKNNLite.inference()
+
+    前处理/后处理完全一致，所以仿真里验过的解码逻辑不用重写。
+    """
+
+    def __init__(self, cfg, camera_matrix, model_path=None):
+        super().__init__(cfg, camera_matrix)
+        self.model_path = str(model_path or cfg.rknn_model_path)
+        self._runtime = None
+
+    def _load(self):
+        if self._runtime is not None:
+            return self._runtime
+        try:
+            from rknnlite.api import RKNNLite
+        except ImportError as e:
+            raise ImportError(
+                "板上需要 rknn-toolkit-lite2：pip install rknn-toolkit-lite2==2.3.2"
+            ) from e
+
+        runtime = RKNNLite()
+        ret = runtime.load_rknn(self.model_path)
+        if ret != 0:
+            raise RuntimeError(f"load_rknn 失败（{ret}）：{self.model_path}")
+
+        core_name = str(self.cfg.rknn_core_mask)
+        core = getattr(RKNNLite, core_name, None)
+        if core is None:
+            raise ValueError(f"未知 rknn_core_mask: {core_name}")
+        ret = runtime.init_runtime(core_mask=core)
+        if ret != 0:
+            raise RuntimeError(f"init_runtime 失败（{ret}），core_mask={core_name}")
+
+        size = int(self.cfg.rknn_input_size)
+        self._input_hw = (size, size)
+        self._input_name = "images"  # RKNN 不用这个名字，只为兼容父类字段
+        self._runtime = runtime
+        return runtime
+
+    def _infer(self, blob):
+        runtime = self._load()
+        # 我们的前处理输出是 NCHW；rknnlite 默认按 NHWC 解读。
+        return runtime.inference(inputs=[blob], data_format="nchw")
 
 
 def build_detector(cfg, camera_matrix, dist_coeffs):
@@ -294,6 +350,15 @@ def build_detector(cfg, camera_matrix, dist_coeffs):
         from .vision import ArucoTracker
 
         return ArucoTracker(cfg, camera_matrix, dist_coeffs)
+
+    # .rknn 走 rknnlite（板上）；优先用命令行传进来的 --weights 路径。
+    if cfg.detector == "rknn" or str(cfg.yolo_weights).lower().endswith(".rknn"):
+        model_path = (
+            cfg.yolo_weights
+            if str(cfg.yolo_weights).lower().endswith(".rknn")
+            else cfg.rknn_model_path
+        )
+        return RknnDetector(cfg, camera_matrix, model_path=model_path)
 
     # .onnx 走纯 onnxruntime，不需要装 ultralytics/torch。
     # 这条路径和香橙派上板（ONNX -> RKNN）是同一套前处理，所以不是临时方案。
