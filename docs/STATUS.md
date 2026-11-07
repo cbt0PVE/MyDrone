@@ -47,7 +47,11 @@
   `TargetSelector` 锁定 ID）；`RknnDetector/OnnxDetector.detect_all` 支持多框；
   `--mot` 开关已接入 `run_tracking` / `video_pipeline`。合成视频：无 MOT 93/120，
   MOT 安全模式 68/120（丢失帧不返回预测框），预测演示 119/120，`id=1` 稳定；
-  测试 5/5。见 `docs/TRACKING_ALGO_PLAN.md`。
+  测试 8/8。见 `docs/TRACKING_ALGO_PLAN.md`。
+- 2026-11-07 **外观 ReID（第一版）**：`vnav/appearance.py` HSV 直方图；
+  MOT 关联 = IoU + 外观相似度，`TargetSelector` 丢失后按外观重捕获；
+  `TrackingDetector.lock_target(frame, bbox)` 支持程序化指定目标。
+  红/蓝交叉、遮挡后蓝人更近仍选回红人（测试 2/2）；板上遮挡 1s/2s 保持 ID。
 - 2026-11-07 **遮挡基准**：黑块挡 0.5/1/2s。旧 `mot_max_age=15` 时 1s/2s 换 ID；
   改 **45**（+`mot_max_lost=45`）后三种时长都保持 `id=1`、重捕获 0 帧。
 - 2026-11-07 **控制仿真 + PI**：`tools/control_sim.py`。目标 0.5m/s、保持 2.5m：

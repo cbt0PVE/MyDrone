@@ -114,6 +114,10 @@ class Config:
     mot_reacquire_px: float = 200.0  # 丢失后按预测中心重捕获的半径
     mot_max_lost: int = 45
     mot_allow_predict: bool = False  # 默认不把预测框当真实检测返回（安全）
+    # 外观 ReID-lite：HSV 直方图，交叉/遮挡后按“像不像”重捕获
+    appearance_enabled: bool = True
+    appearance_weight: float = 0.5
+    appearance_min_sim: float = 0.5
 
     # ---------------- 安全检查 ----------------
     target_stale_hold_s: float = 0.6  # 丢目标超过这个时间 -> 原地悬停

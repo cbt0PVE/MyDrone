@@ -12,7 +12,7 @@ from vnav.mot import IouTracker, TargetSelector, TrackingDetector  # noqa: E402
 from vnav.vision import Detection  # noqa: E402
 
 
-def det(x1, y1, x2, y2, conf=0.9):
+def det(x1, y1, x2, y2, conf=0.9, appearance=None):
     return Detection(
         marker_id=-1,
         center_px=((x1 + x2) / 2.0, (y1 + y2) / 2.0),
@@ -23,6 +23,7 @@ def det(x1, y1, x2, y2, conf=0.9):
         tvec=np.zeros(3),
         confidence=conf,
         bbox=(float(x1), float(y1), float(x2), float(y2)),
+        appearance=appearance,
     )
 
 
@@ -80,6 +81,61 @@ def test_selector_hides_predicted_detection():
     tracks = tr.update([box(130, 100)])
     d2 = sel.select(tracks, frame_center=(320, 240))
     assert d2 is not None and d2.marker_id == 1
+
+
+def test_appearance_resolves_crossing():
+    red = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
+    blue = np.array([0.0, 1.0, 0.0, 0.0], dtype=np.float32)
+    tr = IouTracker(
+        iou_threshold=0.3, max_age=10, min_hits=1,
+        appearance_weight=0.5, appearance_min_sim=0.5,
+    )
+    tr.update([det(100, 100, 200, 300, appearance=red), det(180, 100, 280, 300, appearance=blue)])
+    # 两人交叉：红往右、蓝往左，框都重叠；外观应把 ID 拉回正确的人
+    tr.update([det(160, 100, 260, 300, appearance=red), det(120, 100, 220, 300, appearance=blue)])
+    t1 = [t for t in tr.tracks if t.track_id == 1][0]
+    t2 = [t for t in tr.tracks if t.track_id == 2][0]
+    assert t1.bbox[0] > t2.bbox[0]  # 红(id1)在右，蓝(id2)在左
+
+
+def test_selector_reacquires_by_appearance():
+    red = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
+    blue = np.array([0.0, 1.0, 0.0, 0.0], dtype=np.float32)
+    tr = IouTracker(
+        iou_threshold=0.3, max_age=1, min_hits=1,
+        appearance_weight=0.5, appearance_min_sim=0.5,
+    )
+    sel = TargetSelector(reacquire_px=300, max_lost=10, appearance_min_sim=0.5)
+    tracks = tr.update([det(100, 100, 200, 300, appearance=red), det(400, 100, 500, 300, appearance=blue)])
+    d = sel.select(tracks, frame_center=(150, 200))
+    assert d is not None and d.marker_id == 1
+
+    # 目标消失两帧，轨迹被删；蓝人还在
+    tracks = tr.update([])
+    assert sel.select(tracks, frame_center=(320, 240)) is None
+    tracks = tr.update([det(150, 100, 250, 300, appearance=blue)])
+
+    # 红人重新出现；蓝人离上次位置更近，但外观应选红
+    tracks = tr.update([det(150, 100, 250, 300, appearance=blue), det(100, 100, 200, 300, appearance=red)])
+    d2 = sel.select(tracks, frame_center=(320, 240))
+    assert d2 is not None
+    assert (d2.bbox[0] + d2.bbox[2]) / 2.0 < 200  # 红框中心 ~150
+
+
+def test_lock_target_by_bbox():
+    import types
+
+    frames = [[box(100, 100), box(400, 100)]]
+    cfg = types.SimpleNamespace(
+        mot_iou_threshold=0.3, mot_max_age=10, mot_min_hits=1,
+        mot_velocity_alpha=0.5, mot_reacquire_px=300, mot_max_lost=10,
+        appearance_enabled=False, appearance_weight=0.5, appearance_min_sim=0.5,
+    )
+    det = TrackingDetector(FakeBase(frames), cfg)
+    img = np.zeros((480, 640, 3), np.uint8)
+    out = det.lock_target(img, (390, 90, 510, 310))
+    assert out is not None
+    assert (out.bbox[0] + out.bbox[2]) / 2.0 > 300
 
 
 class FakeBase:

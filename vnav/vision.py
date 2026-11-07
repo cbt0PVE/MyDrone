@@ -54,6 +54,7 @@ class Detection:
     tvec: np.ndarray  # 原始平移向量，调试用
     confidence: float = -1.0  # 检测置信度；ArUco 固定给 1.0，YOLO 给分类分数
     bbox: tuple = None  # (x1, y1, x2, y2) 像素框；多人跟踪用
+    appearance: np.ndarray = None  # 归一化 HSV 直方图；MOT/ReID 用
 
 
 # ====================================================================
