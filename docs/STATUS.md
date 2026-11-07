@@ -37,6 +37,12 @@
   - 40 张 COCO person 图 ONNX↔RKNN **最佳匹配 IoU 0.9899**（min 0.9757），
     top-1 0.9128（多人图选人不同），分数差均值 0.0123，**40/40 都检出**。
   - 工具：`tools/eval_rknn_batch.py`。
+- 2026-11-07 **板上视频链路**：合成 120 帧行人视频，`open_camera → RknnDetector
+  → 标注/写视频` 跑通，**11.2 FPS**（含读帧/标注/写盘），93/120 帧检出
+  （后半段人走出画面）。工具 `tools/video_pipeline.py`。
+- 2026-11-07 **目标时序滤波**：新增 `vnav/tracker.py`（EMA + 跳变抑制），接进
+  `TrackingMission`；控制用平滑值，安全看门狗仍用原始检测，丢目标不会被滤波掩盖。
+  参数：`target_filter_alpha=0.35`、`max_jump=1.5m`、`max_miss=5`；测试 4/4。
 - 2026-10-31 **SITL 相机视觉闭环打通**（不依赖实体相机）：
   - `vnav/camera.py`：取图源抽象（本地摄像头 / 网络流 / **Gazebo Transport**），
     `VisionWorker` 硬编码的 `cv2.VideoCapture` 已收口

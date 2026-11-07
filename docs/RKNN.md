@@ -150,6 +150,27 @@ unshare -r -m bash -c 'mount --bind ~/.local/lib/rknn/librknnrt.so /usr/lib/libr
 > 但离 30 FPS 还有距离。下一步优化点在 DFL/NMS 的 Python 后处理（约 19ms）
 > 和输入转换；要冲 30 FPS 需要更彻底的后处理/C++ 或更小输入尺寸。
 
+### 视频链路（板上）
+
+用 COCO 行人图合成 120 帧横向移动视频，板子上跑
+`open_camera → RknnDetector → 标注 → 写视频`：
+
+| 指标 | 结果 |
+| --- | --- |
+| 帧数 | 120 |
+| 检出帧 | 93（后半段人走到画面边缘，不是检测崩） |
+| 端到端 FPS（含读帧/标注/写视频） | **11.2** |
+| 输出 | `person_pan_out.avi`，框 + `fwd/conf` 正常（conf 0.84–0.88） |
+
+```bash
+bash ~/run_with_rknn.sh python3 ~/tools/video_pipeline.py \
+    --source ~/person_pan.avi --model ~/best_heads.rknn \
+    --out ~/person_pan_out.avi
+```
+
+> 这段是相机到货前最接近实机的验证：说明连续取图 + RKNN 检测在板上能稳定跑，
+> 不是只对单张图有效。
+
 ### 批量精度（40 张 COCO person）
 
 单图不够，已做 40 张同图对照（ONNX top 框 vs RKNN 所有候选取最大 IoU）：

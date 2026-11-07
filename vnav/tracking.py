@@ -16,6 +16,7 @@ import time
 from enum import Enum
 
 from .safety import Action
+from .tracker import TargetFilter
 from .vision import ned_climb_rate
 
 
@@ -40,6 +41,11 @@ class TrackingMission:
         self._last_log = 0.0
         self._last_id = None
         self._last_action = None
+        self.filter = TargetFilter(
+            alpha=cfg.target_filter_alpha,
+            max_jump_m=cfg.target_filter_max_jump_m,
+            max_miss=cfg.target_filter_max_miss,
+        )
 
     async def run(self):
         cfg = self.cfg
@@ -48,10 +54,12 @@ class TrackingMission:
         try:
             while True:
                 loop_start = time.monotonic()
-                det, age = self.vision.latest()
+                raw_det, age = self.vision.latest()
+                # 控制用平滑值；安全看门狗用原始检测（丢目标不能被滤波掩盖）。
+                det = self.filter.update(raw_det)
 
                 # ---- 1. 安全永远先判 ----
-                action, reason = self.safety.evaluate(self.state, det, age)
+                action, reason = self.safety.evaluate(self.state, raw_det, age)
                 if action is Action.RELEASE:
                     self.log(f"!! 交还控制权：{reason}")
                     self._event("safety_release", level="WARN", reason=reason)

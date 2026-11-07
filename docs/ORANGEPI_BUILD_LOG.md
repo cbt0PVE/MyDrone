@@ -107,8 +107,20 @@ setuptools 80.10.2
 
 ---
 
-## 3. 转换尝试（按顺序，含失败）
+### 2.4 板上视频链路（2026-11-07）
 
+| 步骤 | 操作 | 结果 |
+| --- | --- | --- |
+| 1 | 用 COCO 行人图合成 120 帧横向移动视频 | `person_pan.avi`，640×480，8.4MB |
+| 2 | 板上 `open_camera → RknnDetector → 标注 → 写 AVI` | 120 帧 / 93 检出 / **11.2 FPS** |
+| 3 | 输出抽帧检查 | 框落在人身上，conf 0.84–0.88；后半段人走出画面 |
+
+> 93/120 不是检测崩：合成视频的裁剪窗口后半段把人物移出画面。
+> 工具：`tools/video_pipeline.py`。
+
+---
+
+## 3. 转换尝试（按顺序，含失败）
 量化集：`datasets/coco_person/images/train` 前 100 张。
 
 | # | 模型 | 结果 |
@@ -165,6 +177,9 @@ unshare -r -m bash -c '
 | `tools/setup_rknn_wsl.sh` | WSL 环境脚本（onnx 1.16.1 / setuptools<81） |
 | `tools/setup_rknn_board.sh` | 板子用户级安装（OpenCV 4.10 固定） |
 | `tests/test_vision_smoke.py` | 加 `test_rknn_detector_selection` / `test_rknn_heads_decode`（9/9） |
+| `vnav/tracker.py` | **新增**：EMA + 跳变抑制的目标时序滤波 |
+| `vnav/tracking.py` | 控制走滤波值，安全看门狗仍用原始检测 |
+| `tests/test_target_filter.py` | 4 项滤波回归测试 |
 
 ---
 

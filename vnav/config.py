@@ -92,6 +92,14 @@ class Config:
     max_speed_mps: float = 0.6  # 水平速度上限
     deadband_m: float = 0.02  # 误差小于 2cm 不动，防抖
 
+    # ---------------- 目标时序滤波 ----------------
+    # 单帧检测值直接进控制会抖；EMA + 跳变抑制让速度指令稳定。
+    # alpha 越大越跟手、越小越平滑；跳变超过 max_jump 先保持旧值，
+    # 连续 max_miss 帧异常才接受新目标/重置。
+    target_filter_alpha: float = 0.35
+    target_filter_max_jump_m: float = 1.5
+    target_filter_max_miss: int = 5
+
     # ---------------- 安全检查 ----------------
     target_stale_hold_s: float = 0.6  # 丢目标超过这个时间 -> 原地悬停
     target_stale_release_s: float = 2.0  # 再超过这个时间 -> 交还人工
