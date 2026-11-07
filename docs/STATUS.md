@@ -64,9 +64,10 @@
 
 - 2026-11-07 **坠机复盘**：上次是地面站数传延迟 + Ctrl+C 后降落指令没送达飞控；
   **不先解决失控保护不上桨**。参数与拆桨验证清单见 `docs/CRASH_AND_FAILSAFE.md`。
-- 2026-11-07 起：**香橙派 5 Pro 上板 bring-up**。阶段 0（开机、NPU、温度、SSH）已完成，
-  正在做阶段 1（RKNN）：WSL 装 py3.10 + rknn-toolkit2 2.3.2，板上装 lite2，转 `best.rknn`。
-  网络较慢，装完即固定。
+- 2026-11-07 起：**香橙派 5 Pro 上板 bring-up**。阶段 0（开机、NPU、温度、SSH）已完成；
+  阶段 1（RKNN）进行中：板子 lite2 + runtime 2.3.2 已装好，WSL toolkit2 已装好，
+  **卡在 conda torch 2.4.0 与 MKL 2025 的 `iJIT_NotifyEvent` 冲突**，正在降级 MKL。
+  `best.rknn` 尚未生成。见 `docs/RKNN.md` 第七节。
   - 系统镜像 `Orangepi5pro_1.0.6_ubuntu_jammy_desktop_xfce_linux5.10.160.img`
     （8.25GB，SHA256 `bcd25a16…c5a92`）已写卡并通过回读校验。
   - 首次开机成功；Windows 上 `ssh orangepi` 免密可用（IP 见 `docs/ENV.md` C 节）。

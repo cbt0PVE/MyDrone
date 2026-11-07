@@ -155,10 +155,26 @@ python3 run_tracking.py --weights ~/best.rknn --no-arm
 
 - [x] 板子开机、NPU 驱动 v0.9.6、SSH 免密
 - [x] 代码侧 `RknnDetector` / 转换脚本 / 基准脚本
-- [ ] WSL Python 3.10 + rknn-toolkit2 2.3.2 安装（下载中，网络较慢）
+- [x] 板子：pip、numpy 1.26.4、OpenCV 4.10、`rknn-toolkit-lite2 2.3.2`
+- [x] 板子：匹配的 `librknnrt.so 2.3.2` 放在 `~/.local/lib/rknn/`（未覆盖系统库）
+- [x] WSL：Miniconda + Python 3.10 + `rknn-toolkit2 2.3.2` + CPU torch 2.4.0
+- [ ] **卡点：conda 版 torch 2.4.0 + MKL 2025 报 `iJIT_NotifyEvent`**
+      正在降级 `mkl=2023.1.0 intel-openmp=2023.1.0`；若失败改用 pip CPU torch
 - [ ] 转出 `best.rknn`
-- [ ] 板子 lite2 安装 + 基准
-- [ ] 精度对照（ONNX vs RKNN）
+- [ ] 板子基准 + 精度对照
+
+### 恢复时的第一条命令
+
+```bash
+# 1. 看 torch 是否能 import（MKL 降级完成后）
+bash downloads/check_torch.sh
+
+# 2. 能 import 后再跑转换
+bash downloads/run_convert.sh
+```
+
+> 板子跑模型时必须带运行时路径：
+> `LD_LIBRARY_PATH=$HOME/.local/lib/rknn python3 ~/bench_rknn.py --model ~/best.rknn`
 
 > 网络是当前的主要瓶颈：板子 WiFi 和 WSL 下载都不快。装完一次就固定下来，
 > 后面不再反复下载。
