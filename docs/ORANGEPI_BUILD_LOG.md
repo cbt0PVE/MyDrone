@@ -94,6 +94,17 @@ numpy 1.26.4
 setuptools 80.10.2
 ```
 
+### 2.3 板上 MAVSDK 预检（2026-11-07）
+
+| 步骤 | 命令/操作 | 结果 |
+| --- | --- | --- |
+| 1 | `pip install --user mavsdk==3.15.3` | 18.2MB aarch64 轮子，grpcio 1.85.1 也是 aarch64 |
+| 2 | `from mavsdk import System` | OK |
+| 3 | `import vnav.link` | OK |
+| 4 | 检查 `mavsdk_server` | 存在且可执行 |
+
+> 结论：板上 MAVSDK 不是风险；下一步接 UART 只差硬件和串口配置。
+
 ---
 
 ## 3. 转换尝试（按顺序，含失败）
@@ -149,6 +160,7 @@ unshare -r -m bash -c '
 | `tools/convert_rknn.py` | `--heads` / `--quant-algorithm` / `--quant-dtype` / `--rgb2bgr` / `--opt-level` / `--hybrid-level` |
 | `tools/make_rknn_dataset.py` | 生成 100 张量化列表 |
 | `tools/bench_rknn.py` | 板上 FPS 基准（默认 NHWC） |
+| `tools/eval_rknn_batch.py` | 批量 ONNX↔RKNN 框对照 |
 | `tools/run_with_rknn.sh` | 用户态加载 2.3.2 运行时 |
 | `tools/setup_rknn_wsl.sh` | WSL 环境脚本（onnx 1.16.1 / setuptools<81） |
 | `tools/setup_rknn_board.sh` | 板子用户级安装（OpenCV 4.10 固定） |
@@ -164,6 +176,10 @@ unshare -r -m bash -c '
 | ONNX 同图 top 框 | `[160.5, 117.2, 440.7, 595.0]`，score 0.808 |
 | RKNN 同图 top 框 | `[161.6, 116.9, 440.8, 593.2]`，score 0.831 |
 | **IoU** | **0.9916** |
+| 批量 40 张最佳匹配 IoU | **0.9899**（min 0.9757） |
+| 批量 top-1 IoU | 0.9128（多人图选人不同） |
+| 批量分数差 | 均值 0.0123 / 最大 0.0749 |
+| 批量检出（0.35） | ONNX 40/40，RKNN 40/40，漏检 0 |
 | 推理（NHWC） | 54.5 ms / **18.3 FPS** |
 | 端到端 | 72.9 ms / **13.7 FPS** |
 | 冒烟测试 | **9/9** |

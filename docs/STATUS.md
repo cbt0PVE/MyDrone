@@ -32,6 +32,11 @@
   **conf 0.831，与 ONNX 框 IoU 0.9916，推理 18.3 FPS，端到端 13.7 FPS**。
   全模型 INT8 的分类通道会归零，已放弃；FP16 4.8 FPS、ONNX CPU 6.9 FPS 仅作对照。
   见 `docs/RKNN.md`。
+- 2026-11-07 **板上 MAVSDK 预检 + 批量精度**：
+  - `mavsdk 3.15.3` aarch64 轮子可用，`mavsdk_server` 可执行，`vnav.link` import 正常；
+  - 40 张 COCO person 图 ONNX↔RKNN **最佳匹配 IoU 0.9899**（min 0.9757），
+    top-1 0.9128（多人图选人不同），分数差均值 0.0123，**40/40 都检出**。
+  - 工具：`tools/eval_rknn_batch.py`。
 - 2026-10-31 **SITL 相机视觉闭环打通**（不依赖实体相机）：
   - `vnav/camera.py`：取图源抽象（本地摄像头 / 网络流 / **Gazebo Transport**），
     `VisionWorker` 硬编码的 `cv2.VideoCapture` 已收口
@@ -84,20 +89,21 @@
 5. ArUco 标签实际边长、安装朝向（画面顶部是否对机头）尚未实测确认。
 6. **摄像头仍未采购**——视觉只能用笔记本摄像头、手机 IP Webcam、SITL 仿真
    或先用 USB UVC 摄像头验证；装机自主降落要等相机。
-7. 香橙派上 **MAVSDK aarch64 wheel 是否可用**、**5 Pro 排针 UART 定义**待验证；
-   RKNN toolkit2 已在 WSL 24.04 跑通（3 头 INT8，18.3 FPS）。
+7. 香橙派上 **MAVSDK aarch64 已预检通过**（3.15.3 + server）；**5 Pro 排针 UART 定义**
+   仍待验证；RKNN toolkit2 已在 WSL 24.04 跑通（3 头 INT8，18.3 FPS）。
 8. **失控保护参数当前值未知**：`COM_OBL_RC_ACT`、`COM_OF_LOSS_T`、`COM_RC_OVERRIDE`、
    `NAV_RCL_ACT`。上电后用 QGC 读一遍并记录；目标见 `docs/CRASH_AND_FAILSAFE.md`。
-9. **RKNN 与 ONNX 的精度已对照**：同图 top 框 **IoU 0.9916**，score 0.808 vs 0.831。
-   端到端 13.7 FPS，尚未优化到 30。
+9. **RKNN 精度已批量对照**：40 张最佳匹配 IoU **0.9899**（min 0.9757），
+   40/40 检出；端到端 13.7 FPS，尚未优化到 30。
 
 ## 下一步
 
 0. **上桨前先做失控保护地面验证**（拆桨，红线）：`COM_OBL_RC_ACT=Land`、
    `COM_OF_LOSS_T=1.0`、`COM_RC_OVERRIDE` 覆盖 Offboard；脚本杀掉后 2s 内
    飞控必须退出 Offboard 并进入 Land。见 `docs/CRASH_AND_FAILSAFE.md`。
-1. **香橙派 5 Pro 阶段 1：RKNN**（已打通 3 头 INT8）：精度验收过（IoU 0.9916），
-   推理 18.3 FPS / 端到端 13.7 FPS。下一步：后处理优化冲 30 FPS。见 `docs/RKNN.md`。
+1. **香橙派 5 Pro 阶段 1：RKNN**（已打通 3 头 INT8）：精度验收过（单图 IoU 0.9916，
+   40 张 0.9899），推理 18.3 FPS / 端到端 13.7 FPS。下一步：后处理优化冲 30 FPS、
+   板上视频链路验证。见 `docs/RKNN.md`。
 2. **实机调试按 `docs/RC_OFFBOARD_SETUP.md` 走**。红线：清单第 5 项「Offboard 中打杆抢权」不通过就不上桨。
 3. **三类课程场景的 SITL 版本**（不依赖采购，可并行）：静态已有；
    匀速给 actor 加轨迹；部分遮挡加挡板，验证 `target_stale_hold_s` / `_release_s` 分级。

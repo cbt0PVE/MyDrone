@@ -150,6 +150,23 @@ unshare -r -m bash -c 'mount --bind ~/.local/lib/rknn/librknnrt.so /usr/lib/libr
 > 但离 30 FPS 还有距离。下一步优化点在 DFL/NMS 的 Python 后处理（约 19ms）
 > 和输入转换；要冲 30 FPS 需要更彻底的后处理/C++ 或更小输入尺寸。
 
+### 批量精度（40 张 COCO person）
+
+单图不够，已做 40 张同图对照（ONNX top 框 vs RKNN 所有候选取最大 IoU）：
+
+| 指标 | 结果 |
+| --- | --- |
+| 最佳匹配 IoU 均值 | **0.9899** |
+| 最佳匹配 IoU 最小 | **0.9757** |
+| top-1 IoU 均值 | 0.9128（多人图两边选的人不同，属选择差异） |
+| 分数差（绝对值）均值 / 最大 | 0.0123 / 0.0749 |
+| 0.35 阈值检出 | ONNX 40/40，RKNN 40/40，漏检 0 |
+
+```bash
+bash ~/run_with_rknn.sh python3 ~/tools/eval_rknn_batch.py \
+    --onnx ~/best.onnx --rknn ~/best_heads.rknn --images ~/imgs40 --conf 0.35
+```
+
 ---
 
 ## 六、怎么用
@@ -175,6 +192,7 @@ bash ~/run_with_rknn.sh python3 ~/bench_rknn.py --model ~/best_heads.rknn --form
 | `tools/convert_rknn.py` | `--heads` / 量化 / 输出 |
 | `tools/make_rknn_dataset.py` | 量化图片列表 |
 | `tools/bench_rknn.py` | 板上 FPS/耗时 |
+| `tools/eval_rknn_batch.py` | 批量 ONNX↔RKNN 框对照（best-match IoU/分数/漏检） |
 | `tools/run_with_rknn.sh` | 用户态绑定 2.3.2 运行时 |
 
 ---
@@ -199,6 +217,7 @@ bash ~/run_with_rknn.sh python3 ~/bench_rknn.py --model ~/best_heads.rknn --form
 - [x] WSL py3.10 + toolkit2 2.3.2 + 依赖修复
 - [x] **3 头 INT8 模型可检出人，conf 0.831**
 - [x] 推理 18.3 FPS，端到端 13.7 FPS
-- [x] 与 ONNX 的框 **IoU 0.9916**，score 0.808 vs 0.831
+- [x] 与 ONNX 的框 **IoU 0.9916**（单图），40 张批量 **0.9899**（min 0.9757）
 - [ ] 冲 30 FPS（后处理优化 / C++ / 更小输入）
+- [ ] 板上视频链路验证（连续取图 + 检测）
 - [ ] 相机到货后的实拍验证

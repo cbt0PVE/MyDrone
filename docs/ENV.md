@@ -26,6 +26,9 @@
 | 系统 | Orange Pi 1.0.6 Jammy（Ubuntu 22.04） |
 | 内核 | 5.10.160-rockchip-rk3588 |
 | NPU | RKNPU 驱动 v0.9.6（`/sys/kernel/debug/rknpu/version`） |
+| 推理栈 | rknn-toolkit-lite2 **2.3.2** + librknnrt **2.3.2**（`~/.local/lib/rknn`，用 `tools/run_with_rknn.sh` 挂载） |
+| MAVSDK | **3.15.3**（aarch64 wheel，含可执行 `mavsdk_server`；`vnav.link` import 已验证） |
+| Python 包 | numpy 1.26.4 / OpenCV 4.10.0.84 / onnxruntime 1.23.2（用户级） |
 | 网络 | 有线 `enP4p65s0` `192.168.100.147`（MAC `c0:74:2b:f8:cf:6f`）；WiFi `wlan0` `192.168.100.151`（MAC `8c:cd:fe:10:a0:34`，SSID `helta的新路由`）；两条都在线，有线优先 |
 | 账号 | `orangepi`（默认密码，**建议改**；改后 `sudo` 用新密码） |
 | SSH | Windows 上 `ssh orangepi`，密钥免密（`~/.ssh/orangepi5pro_ed25519`） |

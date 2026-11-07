@@ -137,7 +137,8 @@ sudo systemctl disable --now serial-getty@ttySX.service   # 释放串口控制�
 - [ ] 拔掉飞控电源，脚本能发现断链（不是拿着旧值继续跑）
 - [ ] 20Hz 控制循环不丢帧
 
-> **待验证风险**：MAVSDK 的 aarch64 wheel 是否齐全。
+> **已验证（2026-11-07）**：`mavsdk 3.15.3` 有 aarch64 轮子，`mavsdk_server`
+> 可执行，`vnav.link` import 正常。剩下的是 **5 Pro 排针 UART 定义 + 接线**。
 > 先 `pip install mavsdk==3.15.3` 试；装不上就先用 `pymavlink` 做只读遥测把硬件链路验通，
 > **不要**为了装依赖去改 `vnav/link.py` 的架构。
 
@@ -205,7 +206,7 @@ class RknnDetector(OnnxDetector):
 | # | 风险 | 影响 | 应对 |
 | --- | --- | --- | --- |
 | 1 | `rknn-toolkit2` 在 WSL 24.04 装不上 | 转不了模型 | 用 Rockchip Docker 镜像 / conda py3.10 / 借一台 Ubuntu 22.04 |
-| 2 | MAVSDK 无 aarch64 wheel | 板子上连不了飞控 | 先用 pymavlink 只读验证，再决定是否加链路后端 |
+| 2 | ~~MAVSDK 无 aarch64 wheel~~ **已排除**（3.15.3 验证通过） | — | 不需要 pymavlink 兜底 |
 | 3 | 5 Pro 排针 UART 与 5 不同 | 接错口/没信号 | 查官方 pinout；先做 TX-RX 回环 |
 | 4 | 供电掉压重启 | 空中失控 | 独立 5V/5A BEC、粗线、电容；地面满载复测 |
 | 5 | 散热不足降频 | FPS 掉、延迟涨 | 散热片 + 风扇；监控温度 |
