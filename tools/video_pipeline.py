@@ -27,6 +27,7 @@ def main():
     ap.add_argument("--model", required=True, help=".rknn / .onnx / .pt")
     ap.add_argument("--out", default="", help="输出标注视频（.avi），空=不写")
     ap.add_argument("--conf", type=float, default=0.35)
+    ap.add_argument("--mot", action="store_true", help="启用多目标跟踪 + 目标锁定")
     ap.add_argument("--max-frames", type=int, default=0, help="0=全部")
     args = ap.parse_args()
 
@@ -34,6 +35,7 @@ def main():
     cfg.camera_source = args.source
     cfg.yolo_weights = args.model
     cfg.yolo_conf = args.conf
+    cfg.use_mot = args.mot
     cfg.show_window = False
 
     K, dist, note = load_camera_matrix(cfg)
@@ -61,7 +63,8 @@ def main():
                 cv2.circle(frame, (cx, cy), 8, (0, 255, 0), 2)
                 cv2.putText(
                     frame,
-                    "fwd=%.2fm conf=%.2f" % (det.forward_m, det.confidence),
+                    "id=%s fwd=%.2fm conf=%.2f"
+                    % (det.marker_id, det.forward_m, det.confidence),
                     (max(0, cx - 80), max(20, cy - 14)),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.55,

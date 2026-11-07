@@ -100,6 +100,17 @@ class Config:
     target_filter_max_jump_m: float = 1.5
     target_filter_max_miss: int = 5
 
+    # ---------------- 多目标跟踪（MOT） ----------------
+    # use_mot=True 时，检测器输出所有框 → IoU 关联 → 锁定一个 track_id。
+    # 多人/交叉/短遮挡时不再“每帧重新选最大框”。
+    use_mot: bool = False
+    mot_iou_threshold: float = 0.3
+    mot_max_age: int = 15  # 轨迹丢失多少帧后删除
+    mot_min_hits: int = 3  # 连续命中多少帧才 confirmed
+    mot_velocity_alpha: float = 0.5
+    mot_reacquire_px: float = 200.0  # 丢失后按预测中心重捕获的半径
+    mot_max_lost: int = 30
+
     # ---------------- 安全检查 ----------------
     target_stale_hold_s: float = 0.6  # 丢目标超过这个时间 -> 原地悬停
     target_stale_release_s: float = 2.0  # 再超过这个时间 -> 交还人工

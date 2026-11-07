@@ -70,6 +70,7 @@ MyDrone/
 - `docs/ORANGEPI_BRINGUP.md` —— **香橙派上板分阶段验收**：NPU / RKNN / 串口 / 相机
 - `docs/ORANGEPI_BUILD_LOG.md` —— **开箱 → SSH → RKNN 的完整步骤/版本/失败记录**（事后补的流水账）
 - `docs/RKNN.md` —— **ONNX → RKNN → 板上推理**：版本配对、转换、基准、排错
+- `docs/TRACKING_ALGO_PLAN.md` —— **长期算法路线**：MOT/遮挡/ReID/测距/控制仿真，相机到货前能做什么
 - `docs/SITL_CAMERA.md` —— **SITL 相机视觉闭环**：怎么起、仿真内参怎么算、踩过的坑
 - `docs/AI_CONTEXT.md` —— 自包含的交接上下文，新对话直接整段粘贴
 - `docs/GIT_CHEATSHEET.md` —— 拉取/提交/推送与常见报错处理

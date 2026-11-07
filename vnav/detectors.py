@@ -253,6 +253,19 @@ class OnnxDetector:
 
         return self._postprocess(outputs, frame, scale, pad_x, pad_y)
 
+    def detect_all(self, frame):
+        """返回画面里所有通过阈值的 Detection（带 bbox），供 MOT 使用。"""
+        if frame is None:
+            return []
+        self._load()
+        blob, scale, pad_x, pad_y = self._letterbox(frame, self._input_hw)
+        outputs = self._infer(blob)
+        num_classes = max(1, int(outputs[0].shape[1]) - 4) if outputs[0].ndim == 3 else 1
+        xyxy, scores = self._decode(outputs[0], self.cfg.yolo_conf, num_classes)
+        if len(xyxy) == 0:
+            return []
+        return self._finish_all(xyxy, scores, frame, scale, pad_x, pad_y)
+
     def _postprocess(self, outputs, frame, scale, pad_x, pad_y):
         # 单类 person 模型：nc = 1
         num_classes = max(1, int(outputs[0].shape[1]) - 4) if outputs[0].ndim == 3 else 1
@@ -262,6 +275,14 @@ class OnnxDetector:
         return self._finish(xyxy, scores, frame, scale, pad_x, pad_y)
 
     def _finish(self, xyxy, scores, frame, scale, pad_x, pad_y):
+        dets = self._finish_all(xyxy, scores, frame, scale, pad_x, pad_y)
+        if not dets:
+            return None
+        # 取最大的框（离得最近）当主目标，和 YoloDetector 的取舍一致
+        return max(dets, key=lambda d: (d.bbox[3] - d.bbox[1]) if d.bbox else 0.0)
+
+    def _finish_all(self, xyxy, scores, frame, scale, pad_x, pad_y):
+        """把输入坐标的框还原到原图，NMS 后返回所有 Detection（带 bbox）。"""
         import cv2
 
         xyxy = np.asarray(xyxy, dtype=np.float32).copy()
@@ -276,33 +297,35 @@ class OnnxDetector:
                  for x1, y1, x2, y2 in xyxy]
         idxs = cv2.dnn.NMSBoxes(rects, np.asarray(scores).tolist(), self.cfg.yolo_conf, self.NMS_IOU)
         if len(idxs) == 0:
-            return None
+            return []
         idxs = np.array(idxs).flatten().tolist()
 
-        # 取最大的框（离得最近）当主目标，和 YoloDetector 的取舍一致
-        heights = [rects[i][1] for i in idxs]
-        pick = idxs[int(np.argmax(heights))]
-        x1, y1, x2, y2 = xyxy[pick]
-        cx, cy = (x1 + x2) / 2.0, (y1 + y2) / 2.0
-        h_px = float(y2 - y1)
+        dets = []
+        for pick in idxs:
+            x1, y1, x2, y2 = xyxy[pick]
+            cx, cy = (x1 + x2) / 2.0, (y1 + y2) / 2.0
+            h_px = float(y2 - y1)
 
-        pose = estimate_from_bbox(
-            cx, cy, h_px, self.K, self.cfg.person_height_m, self.cfg.camera_mount
-        )
-        if pose is None:
-            return None
-        forward, right, down = pose
-
-        return Detection(
-            marker_id=-1,  # 没有跟踪器，不给稳定 ID
-            center_px=(float(cx), float(cy)),
-            forward_m=forward,
-            right_m=right,
-            down_m=down,
-            yaw_deg=0.0,
-            tvec=np.array([right, down, forward], dtype=float),
-            confidence=float(scores[pick]),
-        )
+            pose = estimate_from_bbox(
+                cx, cy, h_px, self.K, self.cfg.person_height_m, self.cfg.camera_mount
+            )
+            if pose is None:
+                continue
+            forward, right, down = pose
+            dets.append(
+                Detection(
+                    marker_id=-1,  # 没有跟踪器，不给稳定 ID
+                    center_px=(float(cx), float(cy)),
+                    forward_m=forward,
+                    right_m=right,
+                    down_m=down,
+                    yaw_deg=0.0,
+                    tvec=np.array([right, down, forward], dtype=float),
+                    confidence=float(scores[pick]),
+                    bbox=(float(x1), float(y1), float(x2), float(y2)),
+                )
+            )
+        return dets
 
 
 class RknnDetector(OnnxDetector):
@@ -356,6 +379,21 @@ class RknnDetector(OnnxDetector):
         blob = blob * float(self.cfg.rknn_input_scale)
         blob = np.ascontiguousarray(blob.transpose(0, 2, 3, 1))
         return runtime.inference(inputs=[blob], data_format="nhwc")
+
+    def detect_all(self, frame):
+        if frame is None:
+            return []
+        self._load()
+        blob, scale, pad_x, pad_y = self._letterbox(frame, self._input_hw)
+        outputs = self._infer(blob)
+        if len(outputs) == 6:
+            xyxy, scores = self._decode_heads(outputs)
+        else:
+            num_classes = max(1, int(outputs[0].shape[1]) - 4) if outputs[0].ndim == 3 else 1
+            xyxy, scores = self._decode(outputs[0], self.cfg.yolo_conf, num_classes)
+        if len(xyxy) == 0:
+            return []
+        return self._finish_all(xyxy, scores, frame, scale, pad_x, pad_y)
 
     def _postprocess(self, outputs, frame, scale, pad_x, pad_y):
         """6 输出 = 3 个检测头；否则按全模型 [1,5,8400] 走父类。"""
@@ -426,11 +464,17 @@ def build_detector(cfg, camera_matrix, dist_coeffs):
             if str(cfg.yolo_weights).lower().endswith(".rknn")
             else cfg.rknn_model_path
         )
-        return RknnDetector(cfg, camera_matrix, model_path=model_path)
+        base = RknnDetector(cfg, camera_matrix, model_path=model_path)
+    elif str(cfg.yolo_weights).lower().endswith(".onnx"):
+        # .onnx 走纯 onnxruntime，不需要装 ultralytics/torch。
+        # 这条路径和香橙派上板（ONNX -> RKNN）是同一套前处理，所以不是临时方案。
+        base = OnnxDetector(cfg, camera_matrix)
+    else:
+        base = YoloDetector(cfg, camera_matrix)
 
-    # .onnx 走纯 onnxruntime，不需要装 ultralytics/torch。
-    # 这条路径和香橙派上板（ONNX -> RKNN）是同一套前处理，所以不是临时方案。
-    if str(cfg.yolo_weights).lower().endswith(".onnx"):
-        return OnnxDetector(cfg, camera_matrix)
+    # MOT 只对有 detect_all 的检测器生效（ONNX/RKNN）；YoloDetector 自带 ByteTrack。
+    if getattr(cfg, "use_mot", False) and hasattr(base, "detect_all"):
+        from .mot import TrackingDetector
 
-    return YoloDetector(cfg, camera_matrix)
+        return TrackingDetector(base, cfg)
+    return base

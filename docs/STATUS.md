@@ -43,6 +43,11 @@
 - 2026-11-07 **目标时序滤波**：新增 `vnav/tracker.py`（EMA + 跳变抑制），接进
   `TrackingMission`；控制用平滑值，安全看门狗仍用原始检测，丢目标不会被滤波掩盖。
   参数：`target_filter_alpha=0.35`、`max_jump=1.5m`、`max_miss=5`；测试 4/4。
+- 2026-11-07 **多目标跟踪 + 目标锁定**：新增 `vnav/mot.py`（IoU 关联、轨迹 coast、
+  `TargetSelector` 锁定 ID）；`RknnDetector/OnnxDetector.detect_all` 支持多框；
+  `--mot` 开关已接入 `run_tracking` / `video_pipeline`。合成视频 120 帧里
+  **107 帧有目标**（无 MOT 93），`id=1` 全程稳定；测试 4/4。见
+  `docs/TRACKING_ALGO_PLAN.md`。
 - 2026-10-31 **SITL 相机视觉闭环打通**（不依赖实体相机）：
   - `vnav/camera.py`：取图源抽象（本地摄像头 / 网络流 / **Gazebo Transport**），
     `VisionWorker` 硬编码的 `cv2.VideoCapture` 已收口

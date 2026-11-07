@@ -178,8 +178,11 @@ unshare -r -m bash -c '
 | `tools/setup_rknn_board.sh` | 板子用户级安装（OpenCV 4.10 固定） |
 | `tests/test_vision_smoke.py` | 加 `test_rknn_detector_selection` / `test_rknn_heads_decode`（9/9） |
 | `vnav/tracker.py` | **新增**：EMA + 跳变抑制的目标时序滤波 |
+| `vnav/mot.py` | **新增**：IoU 多目标跟踪 + 目标锁定（`--mot`） |
+| `vnav/detectors.py` | `detect_all()`；`build_detector` 可按 `use_mot` 包一层 |
 | `vnav/tracking.py` | 控制走滤波值，安全看门狗仍用原始检测 |
 | `tests/test_target_filter.py` | 4 项滤波回归测试 |
+| `tests/test_mot.py` | 4 项 MOT/锁定回归测试 |
 
 ---
 

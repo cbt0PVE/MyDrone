@@ -72,6 +72,7 @@ def parse_args():
     ap.add_argument("--log-dir", default="logs", help="日志目录，默认 logs/")
     ap.add_argument("--log-hz", type=float, default=2.0, help="状态日志频率，默认 2Hz")
     ap.add_argument("--no-log", action="store_true", help="不写日志文件，只在终端打印")
+    ap.add_argument("--mot", action="store_true", help="启用多目标跟踪 + 目标锁定（多人/遮挡场景）")
     return ap.parse_args()
 
 
@@ -206,6 +207,7 @@ async def _run_inner(args, log, fl):
     if args.alt:
         cfg.hover_alt_m = args.alt
     cfg.show_window = not args.no_window
+    cfg.use_mot = args.mot
 
     auto_takeoff = args.sitl or args.auto_takeoff
 
