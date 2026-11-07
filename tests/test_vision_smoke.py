@@ -168,6 +168,25 @@ def test_rknn_detector_selection():
     assert det2.model_path == cfg2.rknn_model_path
 
 
+def test_rknn_heads_decode():
+    """3 头输出：DFL softmax + sigmoid 后应能解出框和分数。"""
+    cfg = Config()
+    cfg.yolo_conf = 0.5
+    det = RknnDetector(cfg, np.eye(3))
+
+    def head(h, w, logit):
+        box = np.zeros((1, 64, h, w), np.float32)
+        cls = np.full((1, 1, h, w), logit, np.float32)
+        return [box, cls]
+
+    outputs = head(80, 80, 10.0) + head(40, 40, -10.0) + head(20, 20, -10.0)
+    xyxy, scores = det._decode_heads(outputs)
+
+    assert xyxy.shape[1] == 4
+    assert len(scores) > 0
+    assert scores.max() > 0.99
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_")]
     failed = 0

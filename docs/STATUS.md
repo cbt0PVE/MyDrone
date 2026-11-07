@@ -27,9 +27,10 @@
   `[级别][时间](字段=值)` + JSONL 双写，2Hz 状态、事件立即写）；`run_tracking.py` 已接入
   （配置快照、自检、解锁、Offboard、任务阶段、异常、退出）；`tools/flight_mode.sh`
   可一键关/开 WiFi+蓝牙，板子实测 `status` 正常。见 `docs/LOGGING.md`。
-- 2026-11-07 **RKNN 代码路径**（未上板验证）：`vnav/detectors.py` 新增 `RknnDetector`
-  （复用 ONNX 的 letterbox/decode/NMS）；`tools/convert_rknn.py`、`make_rknn_dataset.py`、
-  `bench_rknn.py` 已写好；版本选 2.3.2 配驱动 0.9.6。见 `docs/RKNN.md`。
+- 2026-11-07 **RKNN 代码路径 + 板上实测**：`RknnDetector` 支持 **3 头输出**
+  （DFL softmax + sigmoid + 复用 NMS/测距）；3 头 INT8 模型在板上检出人，
+  **conf 0.831，推理 18.3 FPS，端到端 13.7 FPS**。全模型 INT8 的分类通道会归零，
+  已放弃；FP16 4.8 FPS、ONNX CPU 6.9 FPS 仅作对照。见 `docs/RKNN.md`。
 - 2026-10-31 **SITL 相机视觉闭环打通**（不依赖实体相机）：
   - `vnav/camera.py`：取图源抽象（本地摄像头 / 网络流 / **Gazebo Transport**），
     `VisionWorker` 硬编码的 `cv2.VideoCapture` 已收口
@@ -64,10 +65,9 @@
 
 - 2026-11-07 **坠机复盘**：上次是地面站数传延迟 + Ctrl+C 后降落指令没送达飞控；
   **不先解决失控保护不上桨**。参数与拆桨验证清单见 `docs/CRASH_AND_FAILSAFE.md`。
-- 2026-11-07 起：**香橙派 5 Pro 上板 bring-up**。阶段 0（开机、NPU、温度、SSH）已完成；
-  阶段 1（RKNN）进行中：板子 lite2 + runtime 2.3.2 已装好，WSL toolkit2 已装好，
-  **卡在 conda torch 2.4.0 与 MKL 2025 的 `iJIT_NotifyEvent` 冲突**，正在降级 MKL。
-  `best.rknn` 尚未生成。见 `docs/RKNN.md` 第七节。
+- 2026-11-07 起：**香橙派 5 Pro 上板 bring-up**。阶段 0/1 已完成：3 头 INT8 模型
+  可检出人（conf 0.831），推理 18.3 FPS、端到端 13.7 FPS；下一步做 ONNX↔RKNN
+  精度对照和 30 FPS 优化。见 `docs/RKNN.md`。
   - 系统镜像 `Orangepi5pro_1.0.6_ubuntu_jammy_desktop_xfce_linux5.10.160.img`
     （8.25GB，SHA256 `bcd25a16…c5a92`）已写卡并通过回读校验。
   - 首次开机成功；Windows 上 `ssh orangepi` 免密可用（IP 见 `docs/ENV.md` C 节）。
@@ -83,19 +83,19 @@
 5. ArUco 标签实际边长、安装朝向（画面顶部是否对机头）尚未实测确认。
 6. **摄像头仍未采购**——视觉只能用笔记本摄像头、手机 IP Webcam、SITL 仿真
    或先用 USB UVC 摄像头验证；装机自主降落要等相机。
-7. 香橙派上 **MAVSDK aarch64 wheel 是否可用**、**RKNN toolkit2 在 WSL 24.04 能否安装**、
-   **5 Pro 排针 UART 定义**——三项均为待验证，见 `docs/ORANGEPI_BRINGUP.md` 风险表。
+7. 香橙派上 **MAVSDK aarch64 wheel 是否可用**、**5 Pro 排针 UART 定义**待验证；
+   RKNN toolkit2 已在 WSL 24.04 跑通（3 头 INT8，18.3 FPS）。
 8. **失控保护参数当前值未知**：`COM_OBL_RC_ACT`、`COM_OF_LOSS_T`、`COM_RC_OVERRIDE`、
    `NAV_RCL_ACT`。上电后用 QGC 读一遍并记录；目标见 `docs/CRASH_AND_FAILSAFE.md`。
+9. **RKNN 与 ONNX 的框 IoU / 分数偏差尚未量化**；13.7 FPS 端到端也还没优化到 30。
 
 ## 下一步
 
 0. **上桨前先做失控保护地面验证**（拆桨，红线）：`COM_OBL_RC_ACT=Land`、
    `COM_OF_LOSS_T=1.0`、`COM_RC_OVERRIDE` 覆盖 Offboard；脚本杀掉后 2s 内
    飞控必须退出 Offboard 并进入 Land。见 `docs/CRASH_AND_FAILSAFE.md`。
-1. **香橙派 5 Pro 阶段 1：RKNN**（板子已开机，NPU 驱动 v0.9.6）：在 x86 上把 `best.onnx`
-   转成 `best.rknn`，板上装 `rknn-toolkit-lite2` 跑推理；验收 ≥30 FPS 且与 ONNX 框一致。
-   见 `docs/ORANGEPI_BRINGUP.md`。
+1. **香橙派 5 Pro 阶段 1：RKNN**（已打通 3 头 INT8）：18.3 FPS 推理 / 13.7 FPS 端到端。
+   下一步：ONNX↔RKNN 框 IoU/分数对照；后处理优化冲 30 FPS。见 `docs/RKNN.md`。
 2. **实机调试按 `docs/RC_OFFBOARD_SETUP.md` 走**。红线：清单第 5 项「Offboard 中打杆抢权」不通过就不上桨。
 3. **三类课程场景的 SITL 版本**（不依赖采购，可并行）：静态已有；
    匀速给 actor 加轨迹；部分遮挡加挡板，验证 `target_stale_hold_s` / `_release_s` 分级。

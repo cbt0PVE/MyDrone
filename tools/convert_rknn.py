@@ -28,6 +28,20 @@ def main():
     ap.add_argument("--dataset", default="", help="量化图片列表（每行一个路径）")
     ap.add_argument("--target", default="rk3588", help="目标平台，默认 rk3588")
     ap.add_argument("--no-quant", action="store_true", help="不做 INT8 量化（FP16）")
+    ap.add_argument("--quant-algorithm", default="normal",
+                    choices=["normal", "mmse", "kl_divergence"],
+                    help="INT8 量化算法；分类头被压坏时可试 mmse")
+    ap.add_argument("--quant-dtype", default="w8a8",
+                    choices=["w8a8", "w8a16"],
+                    help="w8a8=纯 INT8；w8a16=权重 int8、激活 fp16，分类头更稳")
+    ap.add_argument("--hybrid-level", type=int, default=0, choices=[0, 1, 2, 3],
+                    help="自动混合量化级别；1=把敏感层保留浮点")
+    ap.add_argument("--opt-level", type=int, default=3, choices=[0, 1, 2, 3],
+                    help="优化级别；0=关掉输出优化，排查输出 int8 问题")
+    ap.add_argument("--rgb2bgr", action="store_true",
+                    help="量化图按 RGB->BGR 处理；颜色顺序不对会把分类头校准坏")
+    ap.add_argument("--heads", action="store_true",
+                    help="只输出 3 个检测头（DFL/分类后处理放 Python），避免全模型 INT8 分类头塌陷")
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
 
@@ -54,12 +68,26 @@ def main():
             mean_values=[[0.0, 0.0, 0.0]],
             std_values=[[255.0, 255.0, 255.0]],
             target_platform=args.target,
-            quantized_algorithm="normal",
-            optimization_level=3,
+            quantized_algorithm=args.quant_algorithm,
+            quantized_dtype=args.quant_dtype,
+            quant_img_RGB2BGR=args.rgb2bgr,
+            optimization_level=args.opt_level,
+            quantized_hybrid_level=args.hybrid_level,
         )
 
         print(f"[2/4] load_onnx {args.onnx}")
-        ret = rknn.load_onnx(model=args.onnx)
+        if args.heads:
+            outputs = [
+                "/model.22/cv2.0/cv2.0.2/Conv_output_0",
+                "/model.22/cv3.0/cv3.0.2/Conv_output_0",
+                "/model.22/cv2.1/cv2.1.2/Conv_output_0",
+                "/model.22/cv3.1/cv3.1.2/Conv_output_0",
+                "/model.22/cv2.2/cv2.2.2/Conv_output_0",
+                "/model.22/cv3.2/cv3.2.2/Conv_output_0",
+            ]
+            ret = rknn.load_onnx(model=args.onnx, outputs=outputs)
+        else:
+            ret = rknn.load_onnx(model=args.onnx)
         if ret != 0:
             sys.exit(f"load_onnx 失败: {ret}")
 

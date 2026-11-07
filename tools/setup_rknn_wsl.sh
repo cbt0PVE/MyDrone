@@ -22,7 +22,7 @@ PIP="$HOME/miniconda3/envs/rknn/bin/pip"
 echo "=== install rknn-toolkit2 2.3.2 (no torch yet) ==="
 "$PIP" install -i https://pypi.tuna.tsinghua.edu.cn/simple --no-cache-dir --no-deps "rknn-toolkit2==2.3.2"
 "$PIP" install -i https://pypi.tuna.tsinghua.edu.cn/simple --no-cache-dir \
-    "numpy==1.26.4" "onnx>=1.16.1" "onnxruntime>=1.10.0" \
+    "numpy==1.26.4" "onnx==1.16.1" "onnxruntime>=1.10.0" "setuptools<81" \
     "opencv-python-headless>=4.5.5.64" "protobuf>=4.21.6,<=4.25.4" \
     "psutil>=5.9.0" "ruamel.yaml>=0.17.21" "scipy>=1.9.3" \
     "tqdm>=4.64.1" "fast-histogram>=0.11"

@@ -56,6 +56,8 @@ class Config:
     rknn_model_path: str = "runs/detect/runs/detect/coco_person/weights/best.rknn"
     rknn_core_mask: str = "NPU_CORE_0_1_2"  # 3 核 NPU 全开；单核可改 NPU_CORE_0
     rknn_input_size: int = 640
+    # 转换时 std=255，所以板上喂 RKNN 的输入要 0–255；ONNX 路径才用 0–1。
+    rknn_input_scale: float = 255.0
     yolo_conf: float = 0.35
     target_class: int = 0  # 单类模型里 person 就是 0
     # 相机安装方向：forward = 朝前（追人用），down = 朝下（降落用）

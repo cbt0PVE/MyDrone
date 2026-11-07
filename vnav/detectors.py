@@ -245,15 +245,26 @@ class OnnxDetector:
             return None
         import cv2
 
+        # 必须在 letterbox 之前加载：_input_hw 是在 _load() 里根据模型输入尺寸设的。
+        # 之前把 _load 挪进 _infer 后，这里拿到的是 None，_letterbox 会直接崩。
+        self._load()
         blob, scale, pad_x, pad_y = self._letterbox(frame, self._input_hw)
         outputs = self._infer(blob)
 
+        return self._postprocess(outputs, frame, scale, pad_x, pad_y)
+
+    def _postprocess(self, outputs, frame, scale, pad_x, pad_y):
         # 单类 person 模型：nc = 1
         num_classes = max(1, int(outputs[0].shape[1]) - 4) if outputs[0].ndim == 3 else 1
         xyxy, scores = self._decode(outputs[0], self.cfg.yolo_conf, num_classes)
         if len(xyxy) == 0:
             return None
+        return self._finish(xyxy, scores, frame, scale, pad_x, pad_y)
 
+    def _finish(self, xyxy, scores, frame, scale, pad_x, pad_y):
+        import cv2
+
+        xyxy = np.asarray(xyxy, dtype=np.float32).copy()
         # 还原到原图坐标（去掉 padding、除以缩放比）
         xyxy[:, [0, 2]] = (xyxy[:, [0, 2]] - pad_x) / scale
         xyxy[:, [1, 3]] = (xyxy[:, [1, 3]] - pad_y) / scale
@@ -263,7 +274,7 @@ class OnnxDetector:
         # NMS：cv2 要的是 (x, y, w, h)
         rects = [[float(x2 - x1), float(y2 - y1), float(x1), float(y1)]
                  for x1, y1, x2, y2 in xyxy]
-        idxs = cv2.dnn.NMSBoxes(rects, scores.tolist(), self.cfg.yolo_conf, self.NMS_IOU)
+        idxs = cv2.dnn.NMSBoxes(rects, np.asarray(scores).tolist(), self.cfg.yolo_conf, self.NMS_IOU)
         if len(idxs) == 0:
             return None
         idxs = np.array(idxs).flatten().tolist()
@@ -340,8 +351,65 @@ class RknnDetector(OnnxDetector):
 
     def _infer(self, blob):
         runtime = self._load()
-        # 我们的前处理输出是 NCHW；rknnlite 默认按 NHWC 解读。
-        return runtime.inference(inputs=[blob], data_format="nchw")
+        # 3 头模型实测 NHWC 比 NCHW 快（18.3 vs 14.8 FPS）。
+        # 前处理出来是 NCHW，这里转一次 NHWC。
+        blob = blob * float(self.cfg.rknn_input_scale)
+        blob = np.ascontiguousarray(blob.transpose(0, 2, 3, 1))
+        return runtime.inference(inputs=[blob], data_format="nhwc")
+
+    def _postprocess(self, outputs, frame, scale, pad_x, pad_y):
+        """6 输出 = 3 个检测头；否则按全模型 [1,5,8400] 走父类。"""
+        if len(outputs) == 6:
+            xyxy, scores = self._decode_heads(outputs)
+            if len(xyxy) == 0:
+                return None
+            return self._finish(xyxy, scores, frame, scale, pad_x, pad_y)
+        return super()._postprocess(outputs, frame, scale, pad_x, pad_y)
+
+    def _decode_heads(self, outputs):
+        """3 头输出：box(64,H,W) + cls(1,H,W)；DFL 在 Python 里解。
+
+        输出顺序必须与 tools/convert_rknn.py 的 --heads 一致：
+          cv2.0, cv3.0, cv2.1, cv3.1, cv2.2, cv3.2
+        """
+        conf = self.cfg.yolo_conf
+        size = int(self.cfg.rknn_input_size)
+        boxes = []
+        scores = []
+        for i in range(0, len(outputs) - 1, 2):
+            box = outputs[i][0]  # (64,H,W)
+            cls = outputs[i + 1][0]  # (1,H,W)
+            _, h, w = box.shape
+            stride = size // h
+
+            dfl = box.reshape(4, 16, h, w)
+            dfl = dfl - dfl.max(axis=1, keepdims=True)
+            prob = np.exp(dfl)
+            prob /= prob.sum(axis=1, keepdims=True)
+            dist = (prob * np.arange(16, dtype=np.float32).reshape(1, 16, 1, 1)).sum(axis=1)
+
+            gx, gy = np.meshgrid(
+                np.arange(w, dtype=np.float32) + 0.5,
+                np.arange(h, dtype=np.float32) + 0.5,
+            )
+            x1 = (gx - dist[0]) * stride
+            y1 = (gy - dist[1]) * stride
+            x2 = (gx + dist[2]) * stride
+            y2 = (gy + dist[3]) * stride
+
+            score = 1.0 / (1.0 + np.exp(-cls[0]))
+            keep = score >= conf
+            if not np.any(keep):
+                continue
+            boxes.append(np.stack([x1[keep], y1[keep], x2[keep], y2[keep]], axis=1))
+            scores.append(score[keep])
+
+        if not boxes:
+            return np.zeros((0, 4), np.float32), np.zeros((0,), np.float32)
+        return (
+            np.concatenate(boxes, axis=0).astype(np.float32),
+            np.concatenate(scores, axis=0).astype(np.float32),
+        )
 
 
 def build_detector(cfg, camera_matrix, dist_coeffs):

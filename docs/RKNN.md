@@ -7,174 +7,195 @@
 
 ---
 
-## 一、版本配对（重要）
+## 一、先记住这个坑：全模型 INT8 不能直接用
 
-| 组件 | 版本 | 位置 |
-| --- | --- | --- |
-| 板子 NPU 驱动 | **0.9.6** | 内核 `rknpu`，`/sys/kernel/debug/rknpu/version` |
-| 板子系统运行时 | **1.4.0（2022-09）** | `/usr/lib/librknnrt.so`（**偏旧**） |
-| 转换工具 | **rknn-toolkit2 2.3.2** | WSL / x86_64，Python 3.10 |
-| 板上推理 | **rknn-toolkit-lite2 2.3.2** | 香橙派，Python 3.10，aarch64 |
+YOLOv8 导出的完整 ONNX 输出是 `(1, 5, 8400)`（4 个框参数 + 1 个类别分数）。
+在 **RKNN Toolkit2 2.3.2 + rk3588** 上，INT8 量化后：
 
-> 板子镜像自带 `librknnrt 1.4.0`，和 2.3.2 的模型不一定匹配。
-> `rknn-toolkit-lite2` 的 wheel 通常自带一份匹配的 `librknnrt.so`；
-> 如果报 “model version not match / driver version” 再处理（见第六节）。
-> **不要一上来就替换系统库**，先备份、先试 wheel 自带的那份。
+- 前 4 个通道（框）正常；
+- **第 5 个通道（类别分数）整列为 0**，sigmoid 后全是 0。
 
-为什么不用 2.5.0：它更新，可能要求更高版本的 NPU 驱动；板子是 2024 年的
-0.9.6，先用 2.3.2 这代更稳。
+试过 `mmse` / `kl_divergence` / `rgb2bgr` / `optimization_level=0` /
+`quantized_hybrid_level=1` / 换输入 dtype，**都没救回来**；FP16 正常但只有 4.8 FPS。
+
+**正确解法：把模型切在 3 个检测头，DFL/分类后处理放 Python。**
+转换时用 `--heads`，得到 6 个输出：
+
+```text
+(1,64,80,80) (1,1,80,80)   stride 8
+(1,64,40,40) (1,1,40,40)   stride 16
+(1,64,20,20) (1,1,20,20)   stride 32
+```
+
+`RknnDetector._decode_heads()` 负责 DFL softmax + sigmoid，再复用 NMS/测距。
 
 ---
 
-## 二、WSL 转换环境（x86_64）
+## 二、版本配对（已实测）
+
+| 组件 | 版本 | 位置 |
+| --- | --- | --- |
+| 板子 NPU 驱动 | **0.9.6** | 内核 `rknpu` |
+| 板子系统运行时 | 1.4.0（镜像自带，**太旧**） | `/usr/lib/librknnrt.so` |
+| 板子实际运行时 | **2.3.2**（放用户目录） | `~/.local/lib/rknn/librknnrt.so` |
+| 转换工具 | **rknn-toolkit2 2.3.2** | WSL / x86_64，Python 3.10 |
+| 板上推理 | **rknn-toolkit-lite2 2.3.2** | 香橙派，Python 3.10，aarch64 |
+
+### 转换环境的三个隐藏依赖
+
+| 现象 | 原因 | 处理 |
+| --- | --- | --- |
+| `module 'onnx' has no attribute 'mapping'` | ONNX ≥1.17 删了 `onnx.mapping` | `pip install onnx==1.16.1` |
+| `No module named 'pkg_resources'` | setuptools ≥81 移除了 | `pip install 'setuptools<81'` |
+| `undefined symbol: iJIT_NotifyEvent` | conda torch 2.4 + MKL 2025 不兼容 | `conda install mkl=2023.1.0 intel-openmp=2023.1.0` |
+
+> 这三个都踩过，装一次就固定下来。`tools/setup_rknn_wsl.sh` 已包含基本依赖，
+> 但 MKL 降级和 ONNX 1.16.1 可能需要手动补，见第六节。
+
+---
+
+## 三、WSL 转换
 
 ```bash
-# 一次性：Python 3.10 + rknn-toolkit2
+# 一次性环境（Miniconda + py3.10 + rknn-toolkit2 2.3.2）
 bash tools/setup_rknn_wsl.sh
 
-# 之后每次转换：
-source ~/miniconda3/etc/profile.d/conda.sh
-conda activate rknn
-```
-
-生成量化图片列表（100–200 张有人的图）：
-
-```bash
+# 生成量化图片列表（100–200 张有人的图）
 python tools/make_rknn_dataset.py \
     --images /mnt/c/Users/<你>/Desktop/drone/datasets/coco_person/images/train \
     --limit 100 \
     --output /tmp/rknn_dataset.txt
-```
 
-转换：
-
-```bash
+# 3 头转换（推荐）
 python tools/convert_rknn.py \
     --onnx /mnt/c/Users/<你>/Desktop/drone/runs/detect/runs/detect/coco_person/weights/best.onnx \
     --dataset /tmp/rknn_dataset.txt \
-    --output /mnt/c/Users/<你>/Desktop/drone/runs/detect/runs/detect/coco_person/weights/best.rknn
+    --output /mnt/c/Users/<你>/Desktop/drone/runs/detect/runs/detect/coco_person/weights/best_heads.rknn \
+    --heads
 ```
 
-- `--no-quant` 出 FP16，用于对照“是不是量化掉点”。
-- 输入归一化：`mean=0, std=255`，对应 ultralytics ONNX 的 RGB 0–1 输入。
-- 当前 ONNX：opset **19**，输入 `1x3x640x640`，输出 `1x5x8400`。
-  如果 2.3.2 不认 opset 19，用 ultralytics 重新导出 `opset=12`。
+- `--heads` 输出 6 个张量；不加就是全模型 `(1,5,8400)`（INT8 会坏，不推荐）。
+- `--no-quant` 出 FP16，用于对照，但板上只有 4.8 FPS，不实用。
+- 输入归一化：转换时 `std=255`，所以**板上要喂 0–255**，不是 0–1。
+- 当前 ONNX opset 19，2.3.2 可以读；如果以后报 opset 不支持，重新导出 opset 12。
 
 ---
 
-## 三、板子安装（aarch64）
+## 四、板子安装
 
-板子镜像默认**没有 pip、numpy、cv2**，用用户级安装，不需要 sudo：
+板子镜像默认**没有 pip、numpy、cv2**，全部用户级安装，不需要 sudo：
 
 ```bash
-# 1. 装 pip（用户级）
+# 1. pip
 curl -sS -L https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
 python3 /tmp/get-pip.py --user
 export PATH="$HOME/.local/bin:$PATH"
 
-# 2. 依赖
+# 2. 依赖（OpenCV 4.10 兼容 numpy 1.x）
 python3 -m pip install --user "numpy==1.26.4" psutil ruamel.yaml
+python3 -m pip install --user "opencv-python-headless==4.10.0.84"
 
-# 3. RKNN Lite2（aarch64 cp310 轮子）
+# 3. RKNN Lite2
 python3 -m pip install --user --no-deps "rknn-toolkit-lite2==2.3.2"
 ```
 
-验证：
+也可以用 `tools/setup_rknn_board.sh` 一次做完。
 
-```bash
-python3 -c "from rknnlite.api import RKNNLite; print('ok')"
+### 运行时 2.3.2（关键）
+
+镜像自带的 `/usr/lib/librknnrt.so` 是 1.4.0，加载 2.3.2 模型会报：
+
+```text
+Invalid RKNN model version 6
 ```
 
-> 也可以用仓库里的 `tools/setup_rknn_board.sh` 一次性做（脚本含 pip bootstrap）。
+但 `rknnlite` 里写死了 `/usr/lib/librknnrt.so`，`LD_LIBRARY_PATH`/`LD_PRELOAD`
+都覆盖不了。当前用**用户态 mount namespace** 临时替换，不需要 sudo：
+
+```bash
+bash tools/run_with_rknn.sh python3 your_script.py
+```
+
+它内部执行：
+
+```bash
+unshare -r -m bash -c 'mount --bind ~/.local/lib/rknn/librknnrt.so /usr/lib/librknnrt.so; exec "$@"'
+```
+
+- 需要内核启用 unprivileged user namespace；本板实测可用。
+- 不会修改系统库，退出即恢复。
+- 如果以后拿到 sudo，最干净的做法是备份系统库后直接替换。
 
 ---
 
-## 四、板上跑基准
+## 五、实测结果（2026-11-07）
 
-把 `best.rknn` 和 `tools/bench_rknn.py` 拷到板子：
+测试图：`datasets/coco_person/images/train/000000000872.jpg`（有人）。
+板上用 `RknnDetector`（3 头 + DFL + NMS + 测距）：
 
-```powershell
-scp runs\detect\runs\detect\coco_person\weights\best.rknn orangepi:~/
-scp tools\bench_rknn.py orangepi:~/
-```
+| 指标 | 结果 |
+| --- | --- |
+| 输出 | 6 个张量，形状符合预期 |
+| 检出 | **conf 0.831**，框中心 `(292, 355)` |
+| 单帧推理（NHWC） | 54.5 ms / **18.3 FPS** |
+| 端到端（含 letterbox + DFL + NMS + 测距） | 72.9 ms / **13.7 FPS** |
+| FP16 全模型 | 209 ms / 4.8 FPS（不可用） |
+| ONNX Runtime CPU | 144 ms / 6.9 FPS（精度对，速度不够） |
+| 全模型 INT8 | 类别通道全 0（不可用） |
+
+> 13.7 FPS 对 2.5m 慢速跟随够用（控制 20Hz，目标年龄 ~73ms），
+> 但离 30 FPS 还有距离。下一步优化点在 DFL/NMS 的 Python 后处理（约 19ms）
+> 和输入转换；要冲 30 FPS 需要更彻底的后处理/C++ 或更小输入尺寸。
+
+---
+
+## 六、怎么用
 
 板上：
 
 ```bash
-python3 ~/bench_rknn.py --model ~/best.rknn --runs 50
+# 纯视觉（不连飞控）
+bash ~/run_with_rknn.sh python3 ~/run_tracking.py --weights ~/best_heads.rknn --no-arm --no-window
+
+# 基准
+bash ~/run_with_rknn.sh python3 ~/bench_rknn.py --model ~/best_heads.rknn --format nhwc --runs 50
 ```
 
-输出：
+`RknnDetector` 也可以被 `run_tracking.py` 直接使用：`--weights xxx.rknn` 即走 RKNN。
 
-- 输入/输出形状
-- 单帧平均/最小/最大耗时
-- FPS
-- 输出是否 NaN/Inf
+代码侧：
 
-验收目标：**640×640、3 核 NPU、≥30 FPS**（yolov8n 单类应远超）。
-
----
-
-## 五、代码接入
-
-| 文件 | 改动 |
+| 文件 | 作用 |
 | --- | --- |
-| `vnav/detectors.py` | 新增 `RknnDetector`，复用 `OnnxDetector` 的 letterbox/decode/NMS；`build_detector` 识别 `.rknn` |
-| `vnav/config.py` | 新增 `rknn_model_path` / `rknn_core_mask` / `rknn_input_size` |
-| `tools/convert_rknn.py` | ONNX → RKNN 转换 |
-| `tools/make_rknn_dataset.py` | 生成量化图片列表 |
-| `tools/bench_rknn.py` | 板上 FPS/耗时基准 |
-
-用法：
-
-```bash
-# 板上，直接用 .rknn
-python3 run_tracking.py --weights ~/best.rknn --no-arm
-
-# 或者在 config.py 里设 detector="rknn"
-```
-
-`RknnDetector` 是懒加载的：没装 `rknnlite` 也能 import / 构造，只有真正推理时才报错。
+| `vnav/detectors.py` | `RknnDetector`：3 头 DFL/sigmoid + 复用 NMS/测距 |
+| `vnav/config.py` | `rknn_model_path` / `rknn_core_mask` / `rknn_input_size` / `rknn_input_scale` |
+| `tools/convert_rknn.py` | `--heads` / 量化 / 输出 |
+| `tools/make_rknn_dataset.py` | 量化图片列表 |
+| `tools/bench_rknn.py` | 板上 FPS/耗时 |
+| `tools/run_with_rknn.sh` | 用户态绑定 2.3.2 运行时 |
 
 ---
 
-## 六、常见问题
+## 七、排错顺序
 
-| 现象 | 原因 | 处理 |
-| --- | --- | --- |
-| `load_rknn` 失败 | 模型/运行时版本不匹配 | 用同版本 toolkit2/lite2；或换 wheel 自带的 `librknnrt.so` |
-| `init_runtime` 失败 | `librknnrt.so` 或 NPU 驱动不匹配 | 先备份 `/usr/lib/librknnrt.so`，再试匹配版本；不要盲删 |
-| 输出形状不对 | RKNN 输入布局/输出顺序 | 确认 NCHW；`bench_rknn.py` 会打印形状 |
-| 精度掉很多 | INT8 量化集不代表飞行画面 | 扩到 200 张；或先 FP16 对照 |
-| `import cv2` 失败 | 板子没装 OpenCV | 用户级 `opencv-python-headless`，或 apt（需 sudo） |
-| 速度慢 | 只用了单核 / 降频 | `rknn_core_mask=NPU_CORE_0_1_2`；看温度是否 >80°C |
+1. **`Invalid RKNN model version 6`** → 没用 `run_with_rknn.sh`，板子还在用 1.4.0。
+2. **`module 'onnx' has no attribute 'mapping'`** → ONNX 降到 1.16.1。
+3. **`No module named 'pkg_resources'`** → setuptools <81。
+4. **`iJIT_NotifyEvent`** → MKL 2023.1 / intel-openmp 2023.1。
+5. **检不出人 / 分数全 0** → 用了全模型 INT8；换 `--heads`。
+6. **分数 0.00x** → 输入没乘 255；`rknn_input_scale=255`。
+7. **速度只有 14 FPS** → 输入用 NHWC；后处理是主要开销，别指望零成本。
 
 ---
 
-## 七、当前状态
+## 八、当前状态
 
-- [x] 板子开机、NPU 驱动 v0.9.6、SSH 免密
-- [x] 代码侧 `RknnDetector` / 转换脚本 / 基准脚本
-- [x] 板子：pip、numpy 1.26.4、OpenCV 4.10、`rknn-toolkit-lite2 2.3.2`
-- [x] 板子：匹配的 `librknnrt.so 2.3.2` 放在 `~/.local/lib/rknn/`（未覆盖系统库）
-- [x] WSL：Miniconda + Python 3.10 + `rknn-toolkit2 2.3.2` + CPU torch 2.4.0
-- [ ] **卡点：conda 版 torch 2.4.0 + MKL 2025 报 `iJIT_NotifyEvent`**
-      正在降级 `mkl=2023.1.0 intel-openmp=2023.1.0`；若失败改用 pip CPU torch
-- [ ] 转出 `best.rknn`
-- [ ] 板子基准 + 精度对照
-
-### 恢复时的第一条命令
-
-```bash
-# 1. 看 torch 是否能 import（MKL 降级完成后）
-bash downloads/check_torch.sh
-
-# 2. 能 import 后再跑转换
-bash downloads/run_convert.sh
-```
-
-> 板子跑模型时必须带运行时路径：
-> `LD_LIBRARY_PATH=$HOME/.local/lib/rknn python3 ~/bench_rknn.py --model ~/best.rknn`
-
-> 网络是当前的主要瓶颈：板子 WiFi 和 WSL 下载都不快。装完一次就固定下来，
-> 后面不再反复下载。
+- [x] 板子开机、NPU 驱动 0.9.6、SSH 免密
+- [x] 板子 pip / numpy 1.26.4 / OpenCV 4.10 / lite2 2.3.2
+- [x] 板子运行时 2.3.2（用户目录 + 用户态 bind mount）
+- [x] WSL py3.10 + toolkit2 2.3.2 + 依赖修复
+- [x] **3 头 INT8 模型可检出人，conf 0.831**
+- [x] 推理 18.3 FPS，端到端 13.7 FPS
+- [ ] 与 ONNX 的框 IoU / 分数偏差量化对照
+- [ ] 冲 30 FPS（后处理优化 / C++ / 更小输入）
+- [ ] 相机到货后的实拍验证

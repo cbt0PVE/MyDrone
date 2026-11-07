@@ -53,6 +53,10 @@ cat /sys/class/thermal/thermal_zone*/temp
 
 ## 二、阶段 1：RKNN 工具链（转换在 x86，推理在板上）
 
+> **2026-11-07 进展**：已打通 3 头 INT8，板上 conf 0.831、推理 18.3 FPS、
+> 端到端 13.7 FPS。版本坑、3 头转换和 `run_with_rknn.sh` 见 `docs/RKNN.md`。
+> 下面的通用流程仍适用，但具体命令以 `docs/RKNN.md` 为准。
+
 ### 关键事实
 
 **`rknn-toolkit2` 只能在 x86_64 Linux 上做模型转换，不能在板子上转。**

@@ -19,7 +19,7 @@ python3 -m pip install --user --no-cache-dir -i https://pypi.tuna.tsinghua.edu.c
 
 echo "=== opencv (optional, may be slow) ==="
 if ! python3 -c "import cv2" 2>/dev/null; then
-    python3 -m pip install --user --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple "opencv-python-headless" || echo "OPENCV_PIP_FAILED"
+    python3 -m pip install --user --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple "opencv-python-headless==4.10.0.84" || echo "OPENCV_PIP_FAILED"
 fi
 
 echo "=== check ==="
