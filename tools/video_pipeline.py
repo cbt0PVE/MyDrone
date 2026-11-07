@@ -28,6 +28,8 @@ def main():
     ap.add_argument("--out", default="", help="输出标注视频（.avi），空=不写")
     ap.add_argument("--conf", type=float, default=0.35)
     ap.add_argument("--mot", action="store_true", help="启用多目标跟踪 + 目标锁定")
+    ap.add_argument("--mot-predict", action="store_true",
+                    help="演示用：丢失时返回预测框；飞行不要开（安全看门狗会看不到丢失）")
     ap.add_argument("--max-frames", type=int, default=0, help="0=全部")
     args = ap.parse_args()
 
@@ -36,6 +38,7 @@ def main():
     cfg.yolo_weights = args.model
     cfg.yolo_conf = args.conf
     cfg.use_mot = args.mot
+    cfg.mot_allow_predict = args.mot_predict
     cfg.show_window = False
 
     K, dist, note = load_camera_matrix(cfg)

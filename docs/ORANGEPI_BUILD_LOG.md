@@ -118,6 +118,28 @@ setuptools 80.10.2
 > 93/120 不是检测崩：合成视频的裁剪窗口后半段把人物移出画面。
 > 工具：`tools/video_pipeline.py`。
 
+### 2.5 MOT 与遮挡基准（2026-11-07）
+
+| 场景 | 结果 |
+| --- | --- |
+| 视频无 MOT | 93/120 帧有目标 |
+| 视频 MOT 安全模式 | 68/120（丢失帧不返回预测框） |
+| 视频 MOT 预测演示 | 119/120（只用于演示） |
+| 遮挡 0.5s，`max_age=15` | 保持 id=1 |
+| 遮挡 1s / 2s，`max_age=15` | 换 id=2 |
+| 遮挡 0.5/1/2s，`max_age=45` | **全部保持 id=1，重捕获 0 帧** |
+
+工具：`tools/video_pipeline.py --mot`、`tools/occlusion_bench.py`。
+
+### 2.6 控制仿真（2026-11-07）
+
+| 控制 | 稳态误差（0.5m/s 目标，保持 2.5m） |
+| --- | --- |
+| P-only | 0.624m |
+| PI（ki=0.3，限幅 2.0，关接近降速） | **0.056m** |
+
+工具：`tools/control_sim.py`；参数变更见 `docs/TRACKING_ALGO_PLAN.md`。
+
 ---
 
 ## 3. 转换尝试（按顺序，含失败）
@@ -173,6 +195,8 @@ unshare -r -m bash -c '
 | `tools/make_rknn_dataset.py` | 生成 100 张量化列表 |
 | `tools/bench_rknn.py` | 板上 FPS 基准（默认 NHWC） |
 | `tools/eval_rknn_batch.py` | 批量 ONNX↔RKNN 框对照 |
+| `tools/occlusion_bench.py` | 遮挡 N 帧的 ID 保持/重捕获基准 |
+| `tools/control_sim.py` | 二维控制仿真（P vs PI） |
 | `tools/run_with_rknn.sh` | 用户态加载 2.3.2 运行时 |
 | `tools/setup_rknn_wsl.sh` | WSL 环境脚本（onnx 1.16.1 / setuptools<81） |
 | `tools/setup_rknn_board.sh` | 板子用户级安装（OpenCV 4.10 固定） |
@@ -180,9 +204,9 @@ unshare -r -m bash -c '
 | `vnav/tracker.py` | **新增**：EMA + 跳变抑制的目标时序滤波 |
 | `vnav/mot.py` | **新增**：IoU 多目标跟踪 + 目标锁定（`--mot`） |
 | `vnav/detectors.py` | `detect_all()`；`build_detector` 可按 `use_mot` 包一层 |
-| `vnav/tracking.py` | 控制走滤波值，安全看门狗仍用原始检测 |
+| `vnav/tracking.py` | 控制走滤波值；PI 距离环；安全看门狗仍用原始检测 |
 | `tests/test_target_filter.py` | 4 项滤波回归测试 |
-| `tests/test_mot.py` | 4 项 MOT/锁定回归测试 |
+| `tests/test_mot.py` | 5 项 MOT/锁定回归测试 |
 
 ---
 

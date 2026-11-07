@@ -159,9 +159,10 @@ unshare -r -m bash -c 'mount --bind ~/.local/lib/rknn/librknnrt.so /usr/lib/libr
 | --- | --- |
 | 帧数 | 120 |
 | 检出帧（无 MOT） | 93（后半段人走到画面边缘） |
-| 检出帧（有 MOT） | **107**（coast + 锁定） |
-| 端到端 FPS（含读帧/标注/写视频） | **11.1–11.2** |
-| 输出 | `person_pan_out.avi` / `person_pan_mot.avi`，框 + `id/fwd/conf` 正常 |
+| 检出帧（MOT 安全模式） | 68（丢失帧不返回预测框，安全优先） |
+| 检出帧（MOT 预测演示） | 119（`--mot-predict`，只用于视觉演示） |
+| 端到端 FPS（含读帧/标注/写视频） | **11.0–11.2** |
+| 输出 | `person_pan_out.avi` / `person_pan_mot_pred.avi`，框 + `id/fwd/conf` 正常 |
 
 ```bash
 # 无 MOT
@@ -169,10 +170,15 @@ bash ~/run_with_rknn.sh python3 ~/tools/video_pipeline.py \
     --source ~/person_pan.avi --model ~/best_heads.rknn \
     --out ~/person_pan_out.avi
 
-# 有 MOT（目标锁定）
+# MOT 安全模式（飞行默认）
 bash ~/run_with_rknn.sh python3 ~/tools/video_pipeline.py \
     --source ~/person_pan.avi --model ~/best_heads.rknn \
     --out ~/person_pan_mot.avi --mot
+
+# MOT 预测演示（不要用于飞行）
+bash ~/run_with_rknn.sh python3 ~/tools/video_pipeline.py \
+    --source ~/person_pan.avi --model ~/best_heads.rknn \
+    --out ~/person_pan_mot_pred.avi --mot --mot-predict
 ```
 
 > 这段是相机到货前最接近实机的验证：说明连续取图 + RKNN 检测在板上能稳定跑，

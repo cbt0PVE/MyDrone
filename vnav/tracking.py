@@ -41,6 +41,7 @@ class TrackingMission:
         self._last_log = 0.0
         self._last_id = None
         self._last_action = None
+        self._dist_integral = 0.0
         self.filter = TargetFilter(
             alpha=cfg.target_filter_alpha,
             max_jump_m=cfg.target_filter_max_jump_m,
@@ -127,13 +128,18 @@ class TrackingMission:
 
         # 距离误差：太远给前进速度，太近给后退速度
         err_dist = det.forward_m - cfg.track_distance_m
-        v_fwd = max(-cfg.max_speed_mps, min(cfg.max_speed_mps, cfg.kp_distance * err_dist))
+        dt = 1.0 / cfg.control_hz
+        self._dist_integral += err_dist * dt
+        lim = float(cfg.distance_integral_limit)
+        self._dist_integral = max(-lim, min(lim, self._dist_integral))
+        v_fwd = cfg.kp_distance * err_dist + cfg.ki_distance * self._dist_integral
+        v_fwd = max(-cfg.max_speed_mps, min(cfg.max_speed_mps, v_fwd))
 
         # 横向：目标偏右（right>0）就往右挪，把它拉回画面中心
         v_right = max(-cfg.max_speed_mps, min(cfg.max_speed_mps, cfg.kp_center * det.right_m))
 
-        # 接近目标时降速，避免冲过头
-        if abs(err_dist) < 0.5:
+        # 接近目标时降速，避免冲过头；near_slowdown_m=0 可关闭
+        if cfg.near_slowdown_m > 0 and abs(err_dist) < cfg.near_slowdown_m:
             v_fwd *= 0.5
 
         return v_fwd, v_right, v_down
@@ -142,6 +148,8 @@ class TrackingMission:
         self.log(f"状态 {self.phase.value} -> {phase.value}")
         self._event("phase_change", old=self.phase.name, new=phase.name)
         self.phase = phase
+        if phase is Phase.SEARCH:
+            self._dist_integral = 0.0
 
     def _event(self, name, level="INFO", **fields):
         """给 FlightLogger 的结构化事件；没接日志器时就静默。"""

@@ -68,6 +68,9 @@ class Config:
     # 追踪时希望保持的距离（目标在画面里的大小对应这个距离）
     track_distance_m: float = 2.5
     kp_distance: float = 0.8  # 距离误差 -> 前后速度
+    ki_distance: float = 0.3  # 距离积分；0.3 在二维仿真里把稳态误差从 0.62m 降到 0.06m
+    distance_integral_limit: float = 2.0  # 积分限幅（米·秒）
+    near_slowdown_m: float = 0.0  # 0=不降速；0.5 会在匀速目标下卡出 ~0.5m 稳态误差
     kp_center: float = 1.2  # 画面横向偏差 -> 左右速度
 
     # ---------------- 飞行高度 ----------------
@@ -105,11 +108,12 @@ class Config:
     # 多人/交叉/短遮挡时不再“每帧重新选最大框”。
     use_mot: bool = False
     mot_iou_threshold: float = 0.3
-    mot_max_age: int = 15  # 轨迹丢失多少帧后删除
+    mot_max_age: int = 45  # 2s 遮挡 @20fps 仍能保住轨迹（基准：15 时 1s 就换 ID）
     mot_min_hits: int = 3  # 连续命中多少帧才 confirmed
     mot_velocity_alpha: float = 0.5
     mot_reacquire_px: float = 200.0  # 丢失后按预测中心重捕获的半径
-    mot_max_lost: int = 30
+    mot_max_lost: int = 45
+    mot_allow_predict: bool = False  # 默认不把预测框当真实检测返回（安全）
 
     # ---------------- 安全检查 ----------------
     target_stale_hold_s: float = 0.6  # 丢目标超过这个时间 -> 原地悬停

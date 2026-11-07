@@ -45,9 +45,14 @@
   参数：`target_filter_alpha=0.35`、`max_jump=1.5m`、`max_miss=5`；测试 4/4。
 - 2026-11-07 **多目标跟踪 + 目标锁定**：新增 `vnav/mot.py`（IoU 关联、轨迹 coast、
   `TargetSelector` 锁定 ID）；`RknnDetector/OnnxDetector.detect_all` 支持多框；
-  `--mot` 开关已接入 `run_tracking` / `video_pipeline`。合成视频 120 帧里
-  **107 帧有目标**（无 MOT 93），`id=1` 全程稳定；测试 4/4。见
-  `docs/TRACKING_ALGO_PLAN.md`。
+  `--mot` 开关已接入 `run_tracking` / `video_pipeline`。合成视频：无 MOT 93/120，
+  MOT 安全模式 68/120（丢失帧不返回预测框），预测演示 119/120，`id=1` 稳定；
+  测试 5/5。见 `docs/TRACKING_ALGO_PLAN.md`。
+- 2026-11-07 **遮挡基准**：黑块挡 0.5/1/2s。旧 `mot_max_age=15` 时 1s/2s 换 ID；
+  改 **45**（+`mot_max_lost=45`）后三种时长都保持 `id=1`、重捕获 0 帧。
+- 2026-11-07 **控制仿真 + PI**：`tools/control_sim.py`。目标 0.5m/s、保持 2.5m：
+  P-only 稳态误差 **0.624m**；PI（`ki=0.3`、积分限幅 2.0、关闭接近降速）
+  降到 **0.056m**。参数变更与回退见 `docs/TRACKING_ALGO_PLAN.md`。
 - 2026-10-31 **SITL 相机视觉闭环打通**（不依赖实体相机）：
   - `vnav/camera.py`：取图源抽象（本地摄像头 / 网络流 / **Gazebo Transport**），
     `VisionWorker` 硬编码的 `cv2.VideoCapture` 已收口

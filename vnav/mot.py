@@ -158,9 +158,12 @@ class IouTracker:
 class TargetSelector:
     """锁定一个 track_id；别的目标再大也不换。"""
 
-    def __init__(self, reacquire_px: float = 200.0, max_lost: int = 30):
+    def __init__(self, reacquire_px: float = 200.0, max_lost: int = 30, allow_predict: bool = False):
         self.reacquire_px = float(reacquire_px)
         self.max_lost = int(max_lost)
+        # 默认不在“丢失帧”返回预测框：安全看门狗必须看到真实的 detect 缺失。
+        # 只保留轨迹用于重捕获；需要做纯视觉演示时才允许预测。
+        self.allow_predict = bool(allow_predict)
         self.lock_id = None
         self.last_center = None
         self.lost_frames = 0
@@ -178,6 +181,10 @@ class TargetSelector:
             t = by_id[self.lock_id]
             if t.time_since_update > 0:
                 self.lost_frames += 1
+                self.last_center = _center(t.bbox)
+                if not self.allow_predict:
+                    # 关键：不要把预测框伪装成真实检测，否则 SafetyMonitor 不会 hold/释放。
+                    return None
             else:
                 self.lost_frames = 0
                 self.last_center = _center(t.bbox)
@@ -233,6 +240,7 @@ class TrackingDetector:
         self.selector = TargetSelector(
             reacquire_px=getattr(cfg, "mot_reacquire_px", 200.0),
             max_lost=getattr(cfg, "mot_max_lost", 30),
+            allow_predict=getattr(cfg, "mot_allow_predict", False),
         )
         self.cfg = cfg
 

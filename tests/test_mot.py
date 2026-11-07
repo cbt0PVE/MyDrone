@@ -66,6 +66,22 @@ def test_selector_does_not_switch_to_bigger_target():
     assert d2 is not None and d2.marker_id == 1
 
 
+def test_selector_hides_predicted_detection():
+    """丢失帧不能返回预测框，否则安全看门狗看不到丢目标。"""
+    tr = IouTracker(iou_threshold=0.3, max_age=10, min_hits=1)
+    sel = TargetSelector(reacquire_px=300, max_lost=10, allow_predict=False)
+    tracks = tr.update([box(100, 100)])
+    d = sel.select(tracks, frame_center=(320, 240))
+    assert d is not None and d.marker_id == 1
+    for _ in range(3):
+        tracks = tr.update([])
+        assert sel.select(tracks, frame_center=(320, 240)) is None
+    # 重新出现，仍应恢复 id=1
+    tracks = tr.update([box(130, 100)])
+    d2 = sel.select(tracks, frame_center=(320, 240))
+    assert d2 is not None and d2.marker_id == 1
+
+
 class FakeBase:
     def __init__(self, frames):
         self.frames = frames
