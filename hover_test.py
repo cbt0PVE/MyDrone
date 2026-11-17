@@ -36,6 +36,7 @@ for _stream in (sys.stdout, sys.stderr):
 from mavsdk import System
 from mavsdk.offboard import Attitude, OffboardError
 from mavsdk.telemetry import FlightMode
+from vnav.flightlog import FlightLogger
 
 # ================= 端口：改这一行 =================
 # 数传电台（SiK/3DR 之类）通常是 57600，写成 "serial://COM5:57600"
@@ -196,6 +197,22 @@ async def watch_status(drone, st):
         log(f"[飞控] {msg.text}")
 
 
+async def watch_log(drone, st, fl):
+    """低频状态快照：模式/解锁/高度/来源/RC/推力。"""
+    while True:
+        fl.state(
+            mode=getattr(st.get("mode"), "name", "?"),
+            armed=bool(st.get("armed")),
+            alt=round(float(st.get("alt", 0.0)), 2),
+            alt_src=st.get("src", "?"),
+            rc=bool(st.get("rc")),
+            yaw=round(float(st.get("yaw", 0.0)), 1),
+            thrust=round(float(st.get("thrust", 0.0)), 3),
+            phase=st.get("phase", "?"),
+        )
+        await asyncio.sleep(0.1)
+
+
 async def watch_rc(drone, st):
     async for rc in drone.telemetry.rc_status():
         # MAVSDK 3.15 的字段是 is_available（不是 available）
@@ -248,6 +265,13 @@ async def main(args) -> int:
           "yaw": 0.0,
           "expect_offboard": False, "handed_over": False}
 
+    fl = FlightLogger(log_dir="logs", prefix="hover_test", state_hz=2.0)
+    fl.log("config", port=args.port, alt=args.alt, hold=args.hold,
+           hover_thrust=args.hover_thrust, kp=args.kp, no_arm=args.no_arm,
+           no_laser=args.no_laser)
+    log(f"日志：{fl.text_path}")
+    log(f"      {fl.jsonl_path}")
+
     tasks = [
         asyncio.create_task(watch_mode(drone, st)),
         asyncio.create_task(watch_armed(drone, st)),
@@ -257,7 +281,9 @@ async def main(args) -> int:
         asyncio.create_task(compute_height(st)),
         asyncio.create_task(watch_status(drone, st)),
         asyncio.create_task(watch_rc(drone, st)),
+        asyncio.create_task(watch_log(drone, st, fl)),
     ]
+    fl.event("link_connected", port=args.port)
 
     try:
         await asyncio.sleep(1.0)
@@ -295,6 +321,7 @@ async def main(args) -> int:
             return 2
         st["expect_offboard"] = True
         log("       [OK] 已进入 OFFBOARD，setpoint 正在被接受")
+        fl.event("offboard_enter")
 
         if args.no_arm:
             log("")
@@ -327,6 +354,7 @@ async def main(args) -> int:
             hint(["没等到 ARMED 状态。飞控可能收到指令但拒绝执行，看上面 [飞控] 提示"])
             return 3
         log("       [OK] 已解锁，动力系统带电")
+        fl.event("armed")
 
         # ---- 5 爬升 + 悬停 ----
         stage(5, total, f"爬升到 {args.alt:.1f} m 并悬停",
@@ -334,9 +362,12 @@ async def main(args) -> int:
         target = args.alt
         climb_end = time.time() + 30
         sat_since, alt_at_sat = None, 0.0
+        st["phase"] = "climb"
+        fl.event("climb_start", alt=target)
         while time.time() < climb_end and not st["handed_over"] and not STOP:
             err = target - st["alt"]
             thrust = max(MIN_THRUST, min(MAX_THRUST, args.hover_thrust + args.kp * err))
+            st["thrust"] = thrust
             await drone.offboard.set_attitude(Attitude(0.0, 0.0, yaw_of(st), thrust))
             log(f"       高度 {st['alt']:5.2f} m({st.get('src', '?')}) | 推力 {thrust * 100:3.0f}% | "
                 f"模式 {getattr(st['mode'], 'name', '?')}")
@@ -363,11 +394,14 @@ async def main(args) -> int:
         # ---- 悬停段 ----
         log("")
         log("-------- 悬停中（Ctrl+C 退出 / 打杆或拨开关可抢权）--------")
+        st["phase"] = "hold"
+        fl.event("hold_start", alt=target, hold=args.hold)
         hold_end = time.time() + args.hold if args.hold > 0 else float("inf")
         last_print = 0.0
         while time.time() < hold_end and not st["handed_over"] and not STOP:
             err = target - st["alt"]
             thrust = max(MIN_THRUST, min(MAX_THRUST, args.hover_thrust + args.kp * err))
+            st["thrust"] = thrust
             await drone.offboard.set_attitude(Attitude(0.0, 0.0, yaw_of(st), thrust))
             if time.time() - last_print > 1.0:
                 last_print = time.time()
@@ -383,6 +417,9 @@ async def main(args) -> int:
         if STOP:
             log("收到 Ctrl+C：跳过剩余悬停，直接缓降")
         log("-------- 缓降 --------")
+        st["phase"] = "descend"
+        st["thrust"] = MIN_THRUST
+        fl.event("descend_start", alt=st["alt"])
         for _ in range(120):  # 最长 12 秒
             if st["handed_over"] or st["alt"] <= 0.15:
                 break
@@ -403,6 +440,7 @@ async def main(args) -> int:
             await asyncio.wait_for(drone.offboard.stop(), 3)
         except Exception:
             pass
+        fl.event("offboard_stop")
 
         # PX4 在 OFFBOARD 里可能拒绝 LAND 指令；先等模式退出 OFFBOARD。
         mode_name = ""
@@ -436,9 +474,11 @@ async def main(args) -> int:
                 log("       [!] 仍未上锁：可能还在下降途中，或传感器认为未落地。请用遥控器确认")
             else:
                 log("       [OK] 已上锁")
+                fl.event("disarmed")
 
         for t in tasks:
             t.cancel()
+        fl.close()
         log("结束")
 
 
