@@ -87,9 +87,9 @@ async def watch_armed(drone, st):
 
 async def watch_rc(drone, st):
     async for rc in drone.telemetry.rc_status():
-        if rc.available != st.get("rc"):
-            st["rc"] = rc.available
-            log("RC 链路有信号" if rc.available else "! RC 链路已断开")
+        if rc.is_available != st.get("rc"):
+            st["rc"] = rc.is_available
+            log("RC 链路有信号" if rc.is_available else "! RC 链路已断开")
 
 
 async def watch_battery(drone, st):

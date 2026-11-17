@@ -318,7 +318,11 @@ async def main(args) -> int:
                   "3. 磁罗盘、加速度计没校准",
                   "4. 电池电压过低"])
             return 3
-        await asyncio.sleep(1.0)
+        await asyncio.sleep(0.5)
+        for _ in range(30):  # 最多等 3 秒，避免遥测状态晚到导致误判
+            if st["armed"]:
+                break
+            await asyncio.sleep(0.1)
         if not st["armed"]:
             hint(["没等到 ARMED 状态。飞控可能收到指令但拒绝执行，看上面 [飞控] 提示"])
             return 3
@@ -400,13 +404,28 @@ async def main(args) -> int:
         except Exception:
             pass
 
+        # PX4 在 OFFBOARD 里可能拒绝 LAND 指令；先等模式退出 OFFBOARD。
+        mode_name = ""
+        for _ in range(20):
+            mode_name = getattr(st.get("mode"), "name", "")
+            if mode_name != "OFFBOARD":
+                break
+            await asyncio.sleep(0.2)
+
         if st.get("armed") and not st.get("handed_over"):
-            log("收尾：降落 + 上锁")
-            try:
-                await asyncio.wait_for(drone.action.land(), 10)
-                log("       [OK] 降落指令已送达")
-            except Exception as e:
-                log(f"       降落指令发送失败: {e}")
+            if mode_name == "LAND":
+                # offboard.stop() 已经触发 LAND；不要再发 land()，否则 PX4 会拒绝。
+                log("收尾：已进入 LAND，等待上锁")
+            else:
+                log("收尾：降落 + 上锁")
+                for attempt in range(2):
+                    try:
+                        await asyncio.wait_for(drone.action.land(), 10)
+                        log("       [OK] 降落指令已送达")
+                        break
+                    except Exception as e:
+                        log(f"       降落指令发送失败({attempt + 1}/2): {e}")
+                        await asyncio.sleep(1.0)
 
             # PX4 落地后会按 COM_DISARM_LAND 自动上锁，这里等它确认
             for _ in range(24):  # 最多 12 秒
