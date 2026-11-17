@@ -18,14 +18,13 @@ from mavsdk.offboard import Attitude
 # ==================================================================
 
 # ==================== 姿态平衡与安全推力参数 ====================
-SERIAL_PORT = "serial://COM5:57600"
+SERIAL_PORT = "serial://COM6:115200"
 
 # 【核心平衡微调】
-# PITCH_TRIM: 正数抬机头(往后退)，负数压机头(往前冲)。往前飘设为 +1.0 ~ +1.5
-PITCH_TRIM = 1.0    
-
-# ROLL_TRIM: 正数往右倾(向右飞)，负数往左倾(向左飞)。机头朝前若往右偏，设为负值拉回
-ROLL_TRIM  = -1.2   
+# 已废弃：固定角度补丁会掩盖加速度计零偏/重心/电机问题。
+# 调零请做 QGC 加速度计 + 水平校准 + RC 中位，不要再改这两个值。
+PITCH_TRIM = 0.0
+ROLL_TRIM = 0.0
 
 TARGET_ALTITUDE = 1.0     # 目标起飞高度: 1 米
 HOVER_DURATION = 5.0      # 悬停时间: 5 秒
@@ -170,4 +169,7 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    raise SystemExit(
+        "takeoff.py 已废弃：固定配平、写死 yaw、结尾 action.kill()。"
+        "禁止用于飞行，请改用 hover_test.py。"
+    )

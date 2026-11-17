@@ -13,8 +13,8 @@ from dataclasses import dataclass, field
 @dataclass
 class Config:
     # ---------------- 链路 ----------------
-    # 数传：serial://COM5:57600    飞控 USB：serial://COM5:115200
-    port: str = os.environ.get("DRONE_PORT", "serial://COM5:57600")
+    # 数传：serial://COM5:57600    飞控 USB：serial://COM6:115200
+    port: str = os.environ.get("DRONE_PORT", "serial://COM6:115200")
     connect_timeout_s: float = 15.0
     control_hz: float = 20.0  # 控制循环频率；PX4 要求 >2Hz，20Hz 留足余量
 

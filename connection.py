@@ -1,12 +1,14 @@
+import argparse
 import asyncio
 from mavsdk import System
 
-async def main():
+
+async def main(port):
     drone = System()
-    
-    # 你的数传所在端口是 COM5，出厂波特率为 57600
-    print(">>> 正在打开数传端口 serial://COM5:57600 ...")
-    await drone.connect(system_address="serial://COM5:57600")
+
+    # 飞控 USB 直连：COM6，115200
+    print(f">>> 正在打开飞控端口 {port} ...")
+    await drone.connect(system_address=port)
 
     print(">>> 等待飞控心跳包（建立连接中）...")
     async for state in drone.core.connection_state():
@@ -30,4 +32,7 @@ async def main():
     print(">>> 基础通信测试完成！")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    ap = argparse.ArgumentParser(description="MAVSDK 飞控连接测试")
+    ap.add_argument("--port", default="serial://COM6:115200",
+                    help="飞控 USB: serial://COM6:115200；数传: serial://COM5:57600")
+    asyncio.run(main(ap.parse_args().port))
