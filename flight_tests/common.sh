@@ -10,6 +10,11 @@ THRUST="${3:-0.14}"
 KP="${4:-0.05}"
 EXTRA_ARGS="${EXTRA_ARGS:-}"
 
+BOOST_ARGS=""
+if [ -n "${BOOST_THRUST:-}" ]; then
+  BOOST_ARGS="--boost-thrust ${BOOST_THRUST} --boost-alt ${BOOST_ALT:-0.25} --boost-sec ${BOOST_SEC:-2.0}"
+fi
+
 cd "$(dirname "$0")/.."
 
 echo "=============================================="
@@ -20,6 +25,7 @@ echo "   hold   : ${HOLD} s"
 echo "   thrust : ${THRUST}"
 echo "   kp     : ${KP}"
 echo "   extra  : ${EXTRA_ARGS:-无}"
+echo "   boost  : ${BOOST_ARGS:-无}"
 echo "=============================================="
 echo " 安全：先手托/系留；RC 全程在手；桨已检查。"
 echo "=============================================="
@@ -31,4 +37,5 @@ exec python3 hover_test.py \
   --hold "$HOLD" \
   --hover-thrust "$THRUST" \
   --kp "$KP" \
+  ${BOOST_ARGS} \
   ${EXTRA_ARGS}

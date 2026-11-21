@@ -292,6 +292,17 @@ async def main(args) -> int:
         stage(2, total, "航前状态")
         log(f"       当前模式 {getattr(st['mode'], 'name', '未知')} | "
             f"解锁 {st['armed']} | RC {'在线' if st['rc'] else '不在线或未知'}")
+
+        # 安全闸：脚本启动时必须已上锁；--no-arm 也不会替你上锁。
+        for _ in range(20):
+            if st["armed"]:
+                break
+            await asyncio.sleep(0.1)
+        if st["armed"]:
+            hint(["当前飞机已经解锁，脚本拒绝继续。",
+                  "先降落/上锁，再重新运行；不要在已解锁状态跑 --no-arm。"])
+            return 2
+
         try:
             h = await asyncio.wait_for(anext(drone.telemetry.health()), 3)
             log(f"       本地位置 {h.is_local_position_ok} | "
@@ -361,12 +372,19 @@ async def main(args) -> int:
               "手托的话现在把飞机托起来，它会自己找平衡")
         target = args.alt
         climb_end = time.time() + 30
+        boost_until = time.time() + max(0.0, args.boost_sec)
         sat_since, alt_at_sat = None, 0.0
         st["phase"] = "climb"
         fl.event("climb_start", alt=target)
         while time.time() < climb_end and not st["handed_over"] and not STOP:
             err = target - st["alt"]
-            thrust = max(MIN_THRUST, min(MAX_THRUST, args.hover_thrust + args.kp * err))
+            boost_active = (
+                args.boost_thrust > 0
+                and st["alt"] < args.boost_alt
+                and time.time() < boost_until
+            )
+            base_thrust = args.boost_thrust if boost_active else args.hover_thrust
+            thrust = max(MIN_THRUST, min(MAX_THRUST, base_thrust + args.kp * err))
             st["thrust"] = thrust
             await drone.offboard.set_attitude(Attitude(0.0, 0.0, yaw_of(st), thrust))
             log(f"       高度 {st['alt']:5.2f} m({st.get('src', '?')}) | 推力 {thrust * 100:3.0f}% | "
@@ -490,6 +508,10 @@ if __name__ == "__main__":
     ap.add_argument("--alt", type=float, default=TARGET_ALT, help="目标高度 m")
     ap.add_argument("--hold", type=float, default=HOLD_SEC, help="悬停秒数，0=一直悬停")
     ap.add_argument("--hover-thrust", type=float, default=HOVER_THRUST, help="悬停基准推力")
+    ap.add_argument("--boost-thrust", type=float, default=0.0,
+                    help="起飞助推推力；0=关闭。只在低于 boost-alt 且前 boost-sec 秒使用")
+    ap.add_argument("--boost-alt", type=float, default=0.25, help="助推结束高度 m")
+    ap.add_argument("--boost-sec", type=float, default=2.0, help="助推最长秒数")
     ap.add_argument("--kp", type=float, default=KP_ALT, help="高度环增益")
     ap.add_argument("--no-arm", action="store_true", help="只发流不解锁")
     ap.add_argument("--no-laser", action="store_true", help="不用 TFmini，强制用气压计控高")
